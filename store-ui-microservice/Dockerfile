@@ -1,12 +1,13 @@
 # Use a very lightweight Nginx image
 FROM nginx:alpine
 
-# Copy the HTML file into the Nginx default public directory
-# The Nginx image is already configured to serve content from this path
+# Remove default Nginx index page (optional but clean)
+RUN rm -rf /usr/share/nginx/html/*
+
+# Copy your static site content into the Nginx public directory
 COPY index.html /usr/share/nginx/html/
 
-# Expose the default Nginx web port (Port 80)
+# Expose the default Nginx web port
 EXPOSE 80
 
-# The default Nginx CMD is sufficient to start the web server
-# CMD ["nginx", "-g", "daemon off;"]
+# The base image's default CMD is used to start Nginx
