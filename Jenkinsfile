@@ -3,7 +3,7 @@ pipeline {
 
     environment {
         AWS_REGION          = 'us-west-2'
-        ECR_REGISTRY        = '165959164050.dkr.ecr.us-west-2.amazonaws.com' // verify your actual registry
+        ECR_REGISTRY        = '165959164050.dkr.ecr.us-west-2.amazonaws.com' // replace with your actual registry
         IMAGE_TAG           = "${env.GIT_COMMIT ? env.GIT_COMMIT.take(7) : env.BUILD_NUMBER}"
         GITOPS_REPO         = 'git@github.com/maxiemoses-eu/agrocd-yaml.git'
         GITOPS_BRANCH       = 'main'
@@ -53,11 +53,12 @@ pipeline {
                         dir('store-ui-microservice') {
                             echo "Installing React dependencies..."
                             sh 'npm install'
+
                             echo "Running React tests..."
-                            // Make tests resilient and non-blocking; use watchAll=false to avoid hanging
                             catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
                                 sh 'npm test -- --watchAll=false'
                             }
+
                             echo "Building production bundle..."
                             sh 'npm run build'
                         }
@@ -84,7 +85,6 @@ pipeline {
 
         stage('Push to ECR') {
             steps {
-                // Use Jenkins AWS credential binding instead of withAWS plugin
                 withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: "${AWS_CREDENTIAL_ID}"]]) {
                     sh """
                         aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${ECR_REGISTRY}
@@ -104,9 +104,8 @@ pipeline {
         }
 
         stage('GitOps Promotion') {
-            // Only proceed if previous stages didn't fail
             when {
-                not { anyOf { failedStages() } }
+                expression { currentBuild.currentResult == 'SUCCESS' }
             }
             steps {
                 sshagent([GITOPS_CREDENTIAL]) {
