@@ -10,7 +10,6 @@ pipeline {
         GITOPS_BRANCH       = 'main'
         GITOPS_CREDENTIAL   = 'gitops-ssh-key'
         AWS_CREDENTIAL_ID   = 'aws-credentials-id'
-        SERVICE_NAMES       = "products-microservice user-microservice cart-microservice store-ui-microservice"
     }
 
     options {
@@ -30,48 +29,32 @@ pipeline {
                 stage('products') {
                     steps {
                         dir('products-microservice') {
-                            script {
-                                if (fileExists('package.json')) {
-                                    sh 'npm install'
-                                    sh 'npm test || echo "No tests defined"'
-                                }
-                            }
+                            sh 'npm install'
+                            sh 'npm test || echo "No tests specified"'
                         }
                     }
                 }
                 stage('user') {
                     steps {
                         dir('user-microservice') {
-                            script {
-                                if (fileExists('requirements.txt')) {
-                                    sh 'python3 -m venv venv'
-                                    sh 'venv/bin/pip install -r requirements.txt'
-                                    sh 'venv/bin/python -m unittest || echo "No tests defined"'
-                                }
-                            }
+                            sh 'python3 -m venv venv'
+                            sh 'venv/bin/pip install -r requirements.txt'
+                            sh 'venv/bin/python -m unittest || echo "No tests defined"'
                         }
                     }
                 }
                 stage('cart') {
                     steps {
                         dir('cart-microservice') {
-                            script {
-                                if (fileExists('CartService.java')) {
-                                    sh 'javac CartService.java'
-                                    echo "Cart microservice compiled successfully"
-                                }
-                            }
+                            sh 'javac CartService.java'
+                            echo "Cart microservice compiled successfully"
                         }
                     }
                 }
                 stage('store-ui') {
                     steps {
                         dir('store-ui-microservice') {
-                            script {
-                                if (fileExists('index.html')) {
-                                    echo "Store UI is static, nothing to compile"
-                                }
-                            }
+                            echo "Store UI is static, nothing to compile"
                         }
                     }
                 }
@@ -81,13 +64,29 @@ pipeline {
         stage('Docker Build & Scan') {
             steps {
                 script {
-                    for (service in SERVICE_NAMES.split(' ')) {
-                        def dockerfile = "${service}/Dockerfile"
-                        def imageName = "${service}:${IMAGE_TAG}"
+                    // Products
+                    sh """
+                        docker build -t products:${IMAGE_TAG} -f products-microservice/Dockerfile products-microservice
+                        trivy image --exit-code 1 --severity HIGH,CRITICAL products:${IMAGE_TAG} || true
+                    """
 
-                        docker.build(imageName, "-f ${dockerfile} ${service}")
-                        sh "trivy image --exit-code 1 --severity HIGH,CRITICAL ${imageName} || true"
-                    }
+                    // User
+                    sh """
+                        docker build -t user:${IMAGE_TAG} -f user-microservice/Dockerfile user-microservice
+                        trivy image --exit-code 1 --severity HIGH,CRITICAL user:${IMAGE_TAG} || true
+                    """
+
+                    // Cart
+                    sh """
+                        docker build -t cart:${IMAGE_TAG} -f cart-microservice/Dockerfile cart-microservice
+                        trivy image --exit-code 1 --severity HIGH,CRITICAL cart:${IMAGE_TAG} || true
+                    """
+
+                    // Store-UI
+                    sh """
+                        docker build -t store-ui:${IMAGE_TAG} -f store-ui-microservice/Dockerfile store-ui-microservice
+                        trivy image --exit-code 1 --severity HIGH,CRITICAL store-ui:${IMAGE_TAG} || true
+                    """
                 }
             }
         }
@@ -98,18 +97,29 @@ pipeline {
                     sh """
                         aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${ECR_REGISTRY}
 
-                        for service in ${SERVICE_NAMES}; do
-                          shortname=\$(echo \$service | sed 's/-microservice//')
-                          LOCAL_TAG="\$service:${IMAGE_TAG}"
-                          REMOTE_TAG="${ECR_REGISTRY}/\$shortname:${IMAGE_TAG}"
-                          LATEST_TAG="${ECR_REGISTRY}/\$shortname:latest"
+                        # Products
+                        docker tag products:${IMAGE_TAG} ${ECR_REGISTRY}/products:${IMAGE_TAG}
+                        docker tag products:${IMAGE_TAG} ${ECR_REGISTRY}/products:latest
+                        docker push ${ECR_REGISTRY}/products:${IMAGE_TAG}
+                        docker push ${ECR_REGISTRY}/products:latest
 
-                          docker tag \${LOCAL_TAG} \${REMOTE_TAG}
-                          docker tag \${LOCAL_TAG} \${LATEST_TAG}
+                        # User
+                        docker tag user:${IMAGE_TAG} ${ECR_REGISTRY}/user:${IMAGE_TAG}
+                        docker tag user:${IMAGE_TAG} ${ECR_REGISTRY}/user:latest
+                        docker push ${ECR_REGISTRY}/user:${IMAGE_TAG}
+                        docker push ${ECR_REGISTRY}/user:latest
 
-                          docker push \${REMOTE_TAG}
-                          docker push \${LATEST_TAG}
-                        done
+                        # Cart
+                        docker tag cart:${IMAGE_TAG} ${ECR_REGISTRY}/cart:${IMAGE_TAG}
+                        docker tag cart:${IMAGE_TAG} ${ECR_REGISTRY}/cart:latest
+                        docker push ${ECR_REGISTRY}/cart:${IMAGE_TAG}
+                        docker push ${ECR_REGISTRY}/cart:latest
+
+                        # Store-UI
+                        docker tag store-ui:${IMAGE_TAG} ${ECR_REGISTRY}/store-ui:${IMAGE_TAG}
+                        docker tag store-ui:${IMAGE_TAG} ${ECR_REGISTRY}/store-ui:latest
+                        docker push ${ECR_REGISTRY}/store-ui:${IMAGE_TAG}
+                        docker push ${ECR_REGISTRY}/store-ui:latest
                     """
                 }
             }
@@ -123,11 +133,12 @@ pipeline {
                         cd gitops
                         git checkout ${GITOPS_BRANCH}
 
-                        for service in ${SERVICE_NAMES}; do
-                          shortname=\$(echo \$service | sed 's/-microservice//')
-                          sed -i.bak "s|image: .*/\$shortname:.*|image: ${ECR_REGISTRY}/\$shortname:${IMAGE_TAG}|g" \${shortname}/deployment.yaml
-                          rm \${shortname}/deployment.yaml.bak
-                        done
+                        sed -i.bak "s|image: .*/products:.*|image: ${ECR_REGISTRY}/products:${IMAGE_TAG}|g" products/deployment.yaml
+                        sed -i.bak "s|image: .*/user:.*|image: ${ECR_REGISTRY}/user:${IMAGE_TAG}|g" user/deployment.yaml
+                        sed -i.bak "s|image: .*/cart:.*|image: ${ECR_REGISTRY}/cart:${IMAGE_TAG}|g" cart/deployment.yaml
+                        sed -i.bak "s|image: .*/store-ui:.*|image: ${ECR_REGISTRY}/store-ui:${IMAGE_TAG}|g" store-ui/deployment.yaml
+
+                        rm */*.bak
 
                         git config user.name "Jenkins CI for StreamlinePay"
                         git config user.email "ci@streamlinepay.com"
