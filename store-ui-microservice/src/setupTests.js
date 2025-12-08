@@ -1,15 +1,12 @@
-// Register jest-dom matchers globally
+// Ensure jest-dom matchers like toBeInTheDocument are available
 import '@testing-library/jest-dom';
 
-// Provide a deterministic fetch for all tests
+// Stable fetch mock across tests
 beforeEach(() => {
   global.fetch = jest.fn((url) => {
-    if (typeof url !== 'string') {
-      return Promise.resolve({ json: () => Promise.resolve({}) });
-    }
-
-    if (url.match(/\/api\/products/i)) {
+    if (url.includes('/products')) {
       return Promise.resolve({
+        ok: true,
         json: () =>
           Promise.resolve([
             { id: 1, name: 'Test Product A', price: 10.0, rating: 4.5 },
@@ -17,23 +14,26 @@ beforeEach(() => {
           ]),
       });
     }
-
-    if (url.match(/\/api\/user/i)) {
+    if (url.includes('/user')) {
       return Promise.resolve({
+        ok: true,
         json: () => Promise.resolve({ name: 'Maxie' }),
       });
     }
-
-    if (url.match(/\/api\/cart/i)) {
+    if (url.includes('/cart')) {
       return Promise.resolve({
-        json: () => Promise.resolve({ items: 3, total: 30.0 }),
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            items: 3,
+            total: 30.0, // Component renders $30 (no trailing .00), match accordingly in tests
+          }),
       });
     }
-
-    return Promise.resolve({ json: () => Promise.resolve({}) });
+    return Promise.reject(new Error('Unknown endpoint'));
   });
 });
 
 afterEach(() => {
-  jest.resetAllMocks();
+  jest.clearAllMocks();
 });

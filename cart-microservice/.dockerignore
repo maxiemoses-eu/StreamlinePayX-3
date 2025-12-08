@@ -1,0 +1,5 @@
+# Keep Docker context minimal
+*.class
+target
+.git
+node_modules
