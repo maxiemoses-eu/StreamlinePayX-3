@@ -3,12 +3,12 @@ pipeline {
 
     environment {
         AWS_REGION          = 'us-west-2'
-        ECR_REGISTRY        = '165959164050.dkr.ecr.us-west-2.amazonaws.com' // replace with your actual registry
+        ECR_REGISTRY        = '165959164050.dkr.ecr.us-west-2.amazonaws.com'
         IMAGE_TAG           = "${env.GIT_COMMIT ? env.GIT_COMMIT.take(7) : env.BUILD_NUMBER}"
         GITOPS_REPO         = 'git@github.com/maxiemoses-eu/agrocd-yaml.git'
         GITOPS_BRANCH       = 'main'
-        GITOPS_CREDENTIAL   = 'gitops-ssh-key'            // ensure this credential exists (SSH private key)
-        AWS_CREDENTIAL_ID   = 'aws-credentials-id'        // ensure this is an "AWS Credentials" type in Jenkins
+        GITOPS_CREDENTIAL   = 'gitops-ssh-key'
+        AWS_CREDENTIAL_ID   = 'aws-credentials-id'
     }
 
     stages {
@@ -68,7 +68,6 @@ pipeline {
                     sh "docker build -t products:${IMAGE_TAG} -f products-microservice/Dockerfile products-microservice"
                     sh "docker build -t user:${IMAGE_TAG} -f user-microservice/Dockerfile user-microservice"
 
-                    // Retry cart build to mitigate transient registry issues
                     retry(3) {
                         sh "docker build -t cart:${IMAGE_TAG} -f cart-microservice/Dockerfile cart-microservice"
                     }
@@ -78,9 +77,22 @@ pipeline {
             }
         }
 
+        stage('Trivy Scan') {
+            steps {
+                script {
+                    // Scan each image for HIGH and CRITICAL vulnerabilities
+                    sh """
+                        trivy image --exit-code 1 --severity HIGH,CRITICAL products:${IMAGE_TAG}
+                        trivy image --exit-code 1 --severity HIGH,CRITICAL user:${IMAGE_TAG}
+                        trivy image --exit-code 1 --severity HIGH,CRITICAL cart:${IMAGE_TAG}
+                        trivy image --exit-code 1 --severity HIGH,CRITICAL store-ui:${IMAGE_TAG}
+                    """
+                }
+            }
+        }
+
         stage('Push to ECR') {
             steps {
-                // Bind AWS credentials of type "AWS Credentials" (Access key + Secret key)
                 withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: "${AWS_CREDENTIAL_ID}"]]) {
                     sh """
                         aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${ECR_REGISTRY}
