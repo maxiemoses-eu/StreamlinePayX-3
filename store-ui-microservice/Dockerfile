@@ -1,13 +1,17 @@
-# Use a very lightweight Nginx image
+# Stage 1: Build React app
+FROM node:20-alpine AS build
+WORKDIR /app
+COPY package*.json ./
+RUN npm install
+COPY . .
+RUN npm run build
+
+# Stage 2: Serve with Nginx
 FROM nginx:alpine
+# Copy the custom Nginx configuration to override the default
+COPY nginx.conf /etc/nginx/conf.d/default.conf 
 
-# Remove default Nginx index page (optional but clean)
-RUN rm -rf /usr/share/nginx/html/*
-
-# Copy your static site content into the Nginx public directory
-COPY index.html /usr/share/nginx/html/
-
-# Expose the default Nginx web port
+# Copy the built React application assets
+COPY --from=build /app/build /usr/share/nginx/html
 EXPOSE 80
-
-# The base image's default CMD is used to start Nginx
+CMD ["nginx", "-g", "daemon off;"]

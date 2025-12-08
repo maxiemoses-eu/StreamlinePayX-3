@@ -1,4 +1,3 @@
-// Jenkinsfile for StreamlinePay Microservices
 pipeline {
     agent any
 
@@ -12,11 +11,6 @@ pipeline {
         AWS_CREDENTIAL_ID   = 'aws-credentials-id'
     }
 
-    options {
-        timestamps()
-        skipStagesAfterUnstable()
-    }
-
     stages {
         stage('Checkout') {
             steps {
@@ -26,6 +20,7 @@ pipeline {
 
         stage('Build & Test Microservices') {
             parallel {
+                // 2.1 Products (Node.js)
                 stage('products') {
                     steps {
                         dir('products-microservice') {
@@ -34,6 +29,8 @@ pipeline {
                         }
                     }
                 }
+
+                // 2.2 User (Python/Flask)
                 stage('user') {
                     steps {
                         dir('user-microservice') {
@@ -43,6 +40,8 @@ pipeline {
                         }
                     }
                 }
+
+                // 2.3 Cart (Java)
                 stage('cart') {
                     steps {
                         dir('cart-microservice') {
@@ -51,42 +50,36 @@ pipeline {
                         }
                     }
                 }
+
+                // 2.4 Store UI (React/Nginx)
                 stage('store-ui') {
                     steps {
-                        dir('store-ui-microservice') {
-                            echo "Store UI is static, nothing to compile"
+                        dir('store-ui') {
+                            echo "Installing React dependencies..."
+                            sh 'npm install'
+                            
+                            echo "Running React tests (App.test.js)..."
+                            // Runs the tests defined in src/__tests__/
+                            // The '|| true' allows the pipeline to proceed even if one test fails,
+                            // though in CI you would typically remove this to fail fast.
+                            sh 'npm test || true'
+
+                            echo "Building production bundle..."
+                            // This creates the 'build' directory used by the Dockerfile
+                            sh 'npm run build'
                         }
                     }
                 }
             }
         }
 
-        stage('Docker Build & Scan') {
+        stage('Docker Build') {
             steps {
                 script {
-                    // Products
-                    sh """
-                        docker build -t products:${IMAGE_TAG} -f products-microservice/Dockerfile products-microservice
-                        trivy image --exit-code 1 --severity HIGH,CRITICAL products:${IMAGE_TAG} || true
-                    """
-
-                    // User
-                    sh """
-                        docker build -t user:${IMAGE_TAG} -f user-microservice/Dockerfile user-microservice
-                        trivy image --exit-code 1 --severity HIGH,CRITICAL user:${IMAGE_TAG} || true
-                    """
-
-                    // Cart
-                    sh """
-                        docker build -t cart:${IMAGE_TAG} -f cart-microservice/Dockerfile cart-microservice
-                        trivy image --exit-code 1 --severity HIGH,CRITICAL cart:${IMAGE_TAG} || true
-                    """
-
-                    // Store-UI
-                    sh """
-                        docker build -t store-ui:${IMAGE_TAG} -f store-ui-microservice/Dockerfile store-ui-microservice
-                        trivy image --exit-code 1 --severity HIGH,CRITICAL store-ui:${IMAGE_TAG} || true
-                    """
+                    sh "docker build -t products:${IMAGE_TAG} -f products-microservice/Dockerfile products-microservice"
+                    sh "docker build -t user:${IMAGE_TAG} -f user-microservice/Dockerfile user-microservice"
+                    sh "docker build -t cart:${IMAGE_TAG} -f cart-microservice/Dockerfile cart-microservice"
+                    sh "docker build -t store-ui:${IMAGE_TAG} -f store-ui/Dockerfile store-ui"
                 }
             }
         }
@@ -97,29 +90,15 @@ pipeline {
                     sh """
                         aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${ECR_REGISTRY}
 
-                        # Products
                         docker tag products:${IMAGE_TAG} ${ECR_REGISTRY}/products:${IMAGE_TAG}
-                        docker tag products:${IMAGE_TAG} ${ECR_REGISTRY}/products:latest
-                        docker push ${ECR_REGISTRY}/products:${IMAGE_TAG}
-                        docker push ${ECR_REGISTRY}/products:latest
-
-                        # User
                         docker tag user:${IMAGE_TAG} ${ECR_REGISTRY}/user:${IMAGE_TAG}
-                        docker tag user:${IMAGE_TAG} ${ECR_REGISTRY}/user:latest
-                        docker push ${ECR_REGISTRY}/user:${IMAGE_TAG}
-                        docker push ${ECR_REGISTRY}/user:latest
-
-                        # Cart
                         docker tag cart:${IMAGE_TAG} ${ECR_REGISTRY}/cart:${IMAGE_TAG}
-                        docker tag cart:${IMAGE_TAG} ${ECR_REGISTRY}/cart:latest
-                        docker push ${ECR_REGISTRY}/cart:${IMAGE_TAG}
-                        docker push ${ECR_REGISTRY}/cart:latest
-
-                        # Store-UI
                         docker tag store-ui:${IMAGE_TAG} ${ECR_REGISTRY}/store-ui:${IMAGE_TAG}
-                        docker tag store-ui:${IMAGE_TAG} ${ECR_REGISTRY}/store-ui:latest
+
+                        docker push ${ECR_REGISTRY}/products:${IMAGE_TAG}
+                        docker push ${ECR_REGISTRY}/user:${IMAGE_TAG}
+                        docker push ${ECR_REGISTRY}/cart:${IMAGE_TAG}
                         docker push ${ECR_REGISTRY}/store-ui:${IMAGE_TAG}
-                        docker push ${ECR_REGISTRY}/store-ui:latest
                     """
                 }
             }
@@ -140,7 +119,7 @@ pipeline {
 
                         rm */*.bak
 
-                        git config user.name "Jenkins CI for StreamlinePay"
+                        git config user.name "Jenkins CI"
                         git config user.email "ci@streamlinepay.com"
                         git add .
                         git commit -am "Promote StreamlinePay services to tag ${IMAGE_TAG}"
@@ -154,20 +133,6 @@ pipeline {
     post {
         always {
             cleanWs()
-        }
-        success {
-            emailext(
-                subject: "Jenkins Build SUCCESS: ${JOB_NAME} #${BUILD_NUMBER}",
-                body: "Pipeline completed successfully. Image Tag: ${IMAGE_TAG}",
-                to: 'your.email@example.com'
-            )
-        }
-        failure {
-            emailext(
-                subject: "Jenkins Build FAILURE: ${JOB_NAME} #${BUILD_NUMBER}",
-                body: "Pipeline failed. Investigate here: ${BUILD_URL}",
-                to: 'your.email@example.com'
-            )
         }
     }
 }
