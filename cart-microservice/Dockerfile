@@ -1,5 +1,5 @@
 # Use a valid slim JDK base image
-FROM eclipse-temurin:17-jdk-jammy
+FROM eclipse-temurin:17-jdk-alpine
 
 WORKDIR /app
 COPY CartService.java .
