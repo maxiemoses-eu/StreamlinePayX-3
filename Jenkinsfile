@@ -3,7 +3,7 @@ pipeline {
 
     environment {
         AWS_REGION          = 'us-west-2'
-        ECR_REGISTRY        = '1659591640509.dkr.ecr.us-west-2.amazonaws.com'
+        ECR_REGISTRY        = '165959164050.dkr.ecr.us-west-2.amazonaws.com' // verify your actual registry
         IMAGE_TAG           = "${env.GIT_COMMIT ? env.GIT_COMMIT.take(7) : env.BUILD_NUMBER}"
         GITOPS_REPO         = 'git@github.com/maxiemoses-eu/agrocd-yaml.git'
         GITOPS_BRANCH       = 'main'
@@ -53,10 +53,11 @@ pipeline {
                         dir('store-ui-microservice') {
                             echo "Installing React dependencies..."
                             sh 'npm install'
-
                             echo "Running React tests..."
-                            sh 'npm test || true'
-
+                            // Make tests resilient and non-blocking; use watchAll=false to avoid hanging
+                            catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
+                                sh 'npm test -- --watchAll=false'
+                            }
                             echo "Building production bundle..."
                             sh 'npm run build'
                         }
@@ -70,7 +71,12 @@ pipeline {
                 script {
                     sh "docker build -t products:${IMAGE_TAG} -f products-microservice/Dockerfile products-microservice"
                     sh "docker build -t user:${IMAGE_TAG} -f user-microservice/Dockerfile user-microservice"
-                    sh "docker build -t cart:${IMAGE_TAG} -f cart-microservice/Dockerfile cart-microservice"
+
+                    // Retry cart build to mitigate Docker Hub/DNS flakiness
+                    retry(3) {
+                        sh "docker build -t cart:${IMAGE_TAG} -f cart-microservice/Dockerfile cart-microservice"
+                    }
+
                     sh "docker build -t store-ui:${IMAGE_TAG} -f store-ui-microservice/Dockerfile store-ui-microservice"
                 }
             }
@@ -78,7 +84,8 @@ pipeline {
 
         stage('Push to ECR') {
             steps {
-                withAWS(credentials: "${AWS_CREDENTIAL_ID}", region: "${AWS_REGION}") {
+                // Use Jenkins AWS credential binding instead of withAWS plugin
+                withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: "${AWS_CREDENTIAL_ID}"]]) {
                     sh """
                         aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${ECR_REGISTRY}
 
@@ -97,6 +104,10 @@ pipeline {
         }
 
         stage('GitOps Promotion') {
+            // Only proceed if previous stages didn't fail
+            when {
+                not { anyOf { failedStages() } }
+            }
             steps {
                 sshagent([GITOPS_CREDENTIAL]) {
                     sh """
