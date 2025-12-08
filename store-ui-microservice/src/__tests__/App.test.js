@@ -1,10 +1,10 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import React from 'react';
 import App from '../App';
+import '@testing-library/jest-dom';   // ✅ this line fixes the matcher error
 
 describe('App Component Smoke Tests', () => {
   beforeEach(() => {
-    // ✅ Reset and mock fetch before each test
     global.fetch = jest.fn((url) => {
       if (/\/api\/products/.test(url)) {
         return Promise.resolve({
@@ -32,23 +32,16 @@ describe('App Component Smoke Tests', () => {
 
   test('renders the main store heading', () => {
     render(<App />);
-    const headingElement = screen.getByText(/StreamlinePay Store/i);
-    expect(headingElement).toBeInTheDocument();
+    expect(screen.getByText(/StreamlinePay Store/i)).toBeInTheDocument();
   });
 
   test('renders fetched product, user, and cart data', async () => {
     render(<App />);
-
-    // Wait for async user data
     await waitFor(() => {
       expect(screen.getByText(/Welcome back, Maxie/i)).toBeInTheDocument();
     });
-
-    // Products
     expect(screen.getByText('Test Product A')).toBeInTheDocument();
     expect(screen.getByText('Test Product B')).toBeInTheDocument();
-
-    // Cart
     expect(screen.getByText(/Cart: 3 items, Total \$30\.00/i)).toBeInTheDocument();
   });
 });
