@@ -5,7 +5,7 @@ pipeline {
         AWS_REGION          = 'us-west-2'
         ECR_REGISTRY        = '1659591640509.dkr.ecr.us-west-2.amazonaws.com'
         IMAGE_TAG           = "${env.GIT_COMMIT ? env.GIT_COMMIT.take(7) : env.BUILD_NUMBER}"
-        GITOPS_REPO         = 'git@github.com:maxiemoses-eu/agrocd-yaml.git'
+        GITOPS_REPO         = 'git@github.com/maxiemoses-eu/agrocd-yaml.git'
         GITOPS_BRANCH       = 'main'
         GITOPS_CREDENTIAL   = 'gitops-ssh-key'
         AWS_CREDENTIAL_ID   = 'aws-credentials-id'
@@ -20,7 +20,6 @@ pipeline {
 
         stage('Build & Test Microservices') {
             parallel {
-                // 2.1 Products (Node.js)
                 stage('products') {
                     steps {
                         dir('products-microservice') {
@@ -30,7 +29,6 @@ pipeline {
                     }
                 }
 
-                // 2.2 User (Python/Flask)
                 stage('user') {
                     steps {
                         dir('user-microservice') {
@@ -41,7 +39,6 @@ pipeline {
                     }
                 }
 
-                // 2.3 Cart (Java)
                 stage('cart') {
                     steps {
                         dir('cart-microservice') {
@@ -51,21 +48,16 @@ pipeline {
                     }
                 }
 
-                // 2.4 Store UI (React/Nginx)
                 stage('store-ui') {
                     steps {
-                        dir('store-ui') {
+                        dir('store-ui-microservice') {
                             echo "Installing React dependencies..."
                             sh 'npm install'
-                            
-                            echo "Running React tests (App.test.js)..."
-                            // Runs the tests defined in src/__tests__/
-                            // The '|| true' allows the pipeline to proceed even if one test fails,
-                            // though in CI you would typically remove this to fail fast.
+
+                            echo "Running React tests..."
                             sh 'npm test || true'
 
                             echo "Building production bundle..."
-                            // This creates the 'build' directory used by the Dockerfile
                             sh 'npm run build'
                         }
                     }
@@ -79,7 +71,7 @@ pipeline {
                     sh "docker build -t products:${IMAGE_TAG} -f products-microservice/Dockerfile products-microservice"
                     sh "docker build -t user:${IMAGE_TAG} -f user-microservice/Dockerfile user-microservice"
                     sh "docker build -t cart:${IMAGE_TAG} -f cart-microservice/Dockerfile cart-microservice"
-                    sh "docker build -t store-ui:${IMAGE_TAG} -f store-ui/Dockerfile store-ui"
+                    sh "docker build -t store-ui:${IMAGE_TAG} -f store-ui-microservice/Dockerfile store-ui-microservice"
                 }
             }
         }
