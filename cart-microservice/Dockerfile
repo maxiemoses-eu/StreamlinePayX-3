@@ -1,5 +1,5 @@
-# Use a slimmer OpenJDK base to avoid huge pulls
-FROM eclipse-temurin:17-jdk-slim
+# Use a valid slim JDK base image
+FROM eclipse-temurin:17-jdk-jammy
 
 WORKDIR /app
 COPY CartService.java .
