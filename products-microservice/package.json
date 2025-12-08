@@ -1,22 +1,14 @@
 {
-  "name": "products-service",
+  "name": "products-microservice",
   "version": "1.0.0",
-  "description": "Simple products microservice",
+  "description": "Products microservice for StreamlinePay",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "test": "echo \"No tests specified\" && exit 0"
   },
-  "dependencies": {
-    "express": "^4.18.2"
-  }
-}{
-  "name": "products-service",
-  "version": "1.0.0",
-  "description": "Simple products microservice",
-  "main": "server.js",
-  "scripts": {
-    "start": "node server.js"
-  },
+  "author": "Maxie Moses Adams",
+  "license": "MIT",
   "dependencies": {
     "express": "^4.18.2"
   }
