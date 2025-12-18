@@ -8,7 +8,7 @@ pipeline {
         GITOPS_REPO         = 'git@github.com/maxiemoses-eu/agrocd-yaml.git'
         GITOPS_BRANCH       = 'main'
         GITOPS_CREDENTIAL   = 'gitops-ssh-key'
-        AWS_CREDENTIAL_ID   = 'aws-credentials-id'
+        AWS_CREDENTIAL_ID   = 'AWS_ECR_PUSH_CREDENTIALS'
     }
 
     stages {
