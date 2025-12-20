@@ -3,7 +3,7 @@ pipeline {
 
     environment {
         AWS_REGION          = 'us-west-2'
-        ECR_REGISTRY        = '165959164050.dkr.ecr.us-west-2.amazonaws.com'
+        ECR_REGISTRY        = '65959164050.dkr.ecr.us-west-2.amazonaws.com'
         IMAGE_TAG           = "${env.GIT_COMMIT ? env.GIT_COMMIT.take(7) : env.BUILD_NUMBER}"
         GITOPS_REPO         = 'git@github.com/maxiemoses-eu/agrocd-yaml.git'
         GITOPS_BRANCH       = 'main'
@@ -67,11 +67,9 @@ pipeline {
                 script {
                     sh "docker build -t products:${IMAGE_TAG} -f products-microservice/Dockerfile products-microservice"
                     sh "docker build -t user:${IMAGE_TAG} -f user-microservice/Dockerfile user-microservice"
-
                     retry(3) {
                         sh "docker build -t cart:${IMAGE_TAG} -f cart-microservice/Dockerfile cart-microservice"
                     }
-
                     sh "docker build -t store-ui:${IMAGE_TAG} -f store-ui-microservice/Dockerfile store-ui-microservice"
                 }
             }
@@ -80,7 +78,6 @@ pipeline {
         stage('Trivy Scan') {
             steps {
                 script {
-                    // Scan each image for HIGH and CRITICAL vulnerabilities
                     sh """
                         trivy image --exit-code 1 --severity HIGH,CRITICAL products:${IMAGE_TAG}
                         trivy image --exit-code 1 --severity HIGH,CRITICAL user:${IMAGE_TAG}
@@ -92,8 +89,14 @@ pipeline {
         }
 
         stage('Push to ECR') {
+            when {
+                expression { currentBuild.result == null || currentBuild.result == 'SUCCESS' }
+            }
             steps {
-                withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: "${AWS_CREDENTIAL_ID}"]]) {
+                withCredentials([[
+                    $class: 'AmazonWebServicesCredentialsBinding',
+                    credentialsId: "${AWS_CREDENTIAL_ID}"
+                ]]) {
                     sh """
                         aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${ECR_REGISTRY}
 
@@ -112,7 +115,9 @@ pipeline {
         }
 
         stage('GitOps Promotion') {
-            when { expression { currentBuild.currentResult == 'SUCCESS' } }
+            when {
+                expression { currentBuild.result == null || currentBuild.result == 'SUCCESS' }
+            }
             steps {
                 sshagent([GITOPS_CREDENTIAL]) {
                     sh """
@@ -139,6 +144,14 @@ pipeline {
     }
 
     post {
-        always { cleanWs() }
+        success {
+            echo "✅ CI/CD pipeline completed successfully. Images pushed and GitOps repo updated."
+        }
+        failure {
+            echo "❌ Pipeline failed. Check logs for details."
+        }
+        always {
+            cleanWs()
+        }
     }
 }
