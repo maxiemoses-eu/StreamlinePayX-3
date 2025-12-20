@@ -48,12 +48,10 @@ pipeline {
                         dir('store-ui-microservice') {
                             echo "Installing React dependencies..."
                             sh 'npm install'
-
                             echo "Running React tests..."
                             catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
                                 sh 'npm test -- --watchAll=false'
                             }
-
                             echo "Building production bundle..."
                             sh 'npm run build'
                         }
@@ -75,28 +73,20 @@ pipeline {
             }
         }
 
-        stage('Trivy Scan') {
-            parallel {
-                stage('Scan: products') {
-                    steps {
-                        sh "trivy image --scanners vuln --exit-code 1 --severity HIGH,CRITICAL products:${IMAGE_TAG}"
-                    }
-                }
-                stage('Scan: user') {
-                    steps {
-                        sh "trivy image --scanners vuln --exit-code 1 --severity HIGH,CRITICAL user:${IMAGE_TAG}"
-                    }
-                }
-                stage('Scan: cart') {
-                    steps {
-                        sh "trivy image --scanners vuln --exit-code 1 --severity HIGH,CRITICAL cart:${IMAGE_TAG}"
-                    }
-                }
-                stage('Scan: store-ui') {
-                    steps {
-                        sh "trivy image --scanners vuln --exit-code 1 --severity HIGH,CRITICAL store-ui:${IMAGE_TAG}"
-                    }
-                }
+        # UPDATED: Sequential Trivy Scan
+        stage('Trivy Security Scan') {
+            steps {
+                echo "🔍 Scanning Products Microservice..."
+                sh "trivy image --scanners vuln --exit-code 1 --severity HIGH,CRITICAL products:${IMAGE_TAG}"
+                
+                echo "🔍 Scanning User Microservice..."
+                sh "trivy image --scanners vuln --exit-code 1 --severity HIGH,CRITICAL user:${IMAGE_TAG}"
+                
+                echo "🔍 Scanning Cart Microservice..."
+                sh "trivy image --scanners vuln --exit-code 1 --severity HIGH,CRITICAL cart:${IMAGE_TAG}"
+                
+                echo "🔍 Scanning Store-UI Microservice..."
+                sh "trivy image --scanners vuln --exit-code 1 --severity HIGH,CRITICAL store-ui:${IMAGE_TAG}"
             }
         }
 
