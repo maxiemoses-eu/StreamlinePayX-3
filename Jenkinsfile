@@ -73,19 +73,26 @@ pipeline {
             }
         }
 
-        // FIXED: Sequential Trivy Scan to prevent Database Lock errors
+        // HARDENED SEQUENTIAL SCAN: Includes DB pre-download and cooldown pauses
         stage('Trivy Security Scan') {
             steps {
                 script {
+                    echo "📥 Downloading Vulnerability Database..."
+                    // Download the DB once so individual scans don't fight over the network
+                    sh "trivy image --download-db-only --quiet"
+
                     echo "🔍 Scanning Products Microservice..."
                     sh "trivy image --scanners vuln --exit-code 1 --severity HIGH,CRITICAL products:${IMAGE_TAG}"
-                    
+                    sh "sleep 3" // Wait for file lock release
+
                     echo "🔍 Scanning User Microservice..."
                     sh "trivy image --scanners vuln --exit-code 1 --severity HIGH,CRITICAL user:${IMAGE_TAG}"
-                    
+                    sh "sleep 3"
+
                     echo "🔍 Scanning Cart Microservice..."
                     sh "trivy image --scanners vuln --exit-code 1 --severity HIGH,CRITICAL cart:${IMAGE_TAG}"
-                    
+                    sh "sleep 3"
+
                     echo "🔍 Scanning Store-UI Microservice..."
                     sh "trivy image --scanners vuln --exit-code 1 --severity HIGH,CRITICAL store-ui:${IMAGE_TAG}"
                 }
@@ -113,14 +120,6 @@ pipeline {
                         docker push ${ECR_REGISTRY}/user:${IMAGE_TAG}
                         docker push ${ECR_REGISTRY}/cart:${IMAGE_TAG}
                         docker push ${ECR_REGISTRY}/store-ui:${IMAGE_TAG}
-                    """
-
-                    echo "📦 Image digests:"
-                    sh """
-                        docker inspect --format='products: {{index .RepoDigests 0}}' ${ECR_REGISTRY}/products:${IMAGE_TAG}
-                        docker inspect --format='user: {{index .RepoDigests 0}}' ${ECR_REGISTRY}/user:${IMAGE_TAG}
-                        docker inspect --format='cart: {{index .RepoDigests 0}}' ${ECR_REGISTRY}/cart:${IMAGE_TAG}
-                        docker inspect --format='store-ui: {{index .RepoDigests 0}}' ${ECR_REGISTRY}/store-ui:${IMAGE_TAG}
                     """
                 }
             }
@@ -161,14 +160,8 @@ pipeline {
     }
 
     post {
-        success {
-            echo "✅ CI/CD pipeline completed successfully. Images pushed and GitOps repo updated."
-        }
-        failure {
-            echo "❌ Pipeline failed. Check logs for details."
-        }
-        always {
-            cleanWs()
-        }
+        success { echo "✅ CI/CD pipeline completed successfully." }
+        failure { echo "❌ Pipeline failed. Check logs for details." }
+        always { cleanWs() }
     }
 }
