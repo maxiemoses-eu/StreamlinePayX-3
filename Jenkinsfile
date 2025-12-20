@@ -73,20 +73,22 @@ pipeline {
             }
         }
 
-        # UPDATED: Sequential Trivy Scan
+        // FIXED: Sequential Trivy Scan to prevent Database Lock errors
         stage('Trivy Security Scan') {
             steps {
-                echo "🔍 Scanning Products Microservice..."
-                sh "trivy image --scanners vuln --exit-code 1 --severity HIGH,CRITICAL products:${IMAGE_TAG}"
-                
-                echo "🔍 Scanning User Microservice..."
-                sh "trivy image --scanners vuln --exit-code 1 --severity HIGH,CRITICAL user:${IMAGE_TAG}"
-                
-                echo "🔍 Scanning Cart Microservice..."
-                sh "trivy image --scanners vuln --exit-code 1 --severity HIGH,CRITICAL cart:${IMAGE_TAG}"
-                
-                echo "🔍 Scanning Store-UI Microservice..."
-                sh "trivy image --scanners vuln --exit-code 1 --severity HIGH,CRITICAL store-ui:${IMAGE_TAG}"
+                script {
+                    echo "🔍 Scanning Products Microservice..."
+                    sh "trivy image --scanners vuln --exit-code 1 --severity HIGH,CRITICAL products:${IMAGE_TAG}"
+                    
+                    echo "🔍 Scanning User Microservice..."
+                    sh "trivy image --scanners vuln --exit-code 1 --severity HIGH,CRITICAL user:${IMAGE_TAG}"
+                    
+                    echo "🔍 Scanning Cart Microservice..."
+                    sh "trivy image --scanners vuln --exit-code 1 --severity HIGH,CRITICAL cart:${IMAGE_TAG}"
+                    
+                    echo "🔍 Scanning Store-UI Microservice..."
+                    sh "trivy image --scanners vuln --exit-code 1 --severity HIGH,CRITICAL store-ui:${IMAGE_TAG}"
+                }
             }
         }
 
