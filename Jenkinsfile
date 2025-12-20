@@ -76,14 +76,26 @@ pipeline {
         }
 
         stage('Trivy Scan') {
-            steps {
-                script {
-                    sh """
-                        trivy image --exit-code 1 --severity HIGH,CRITICAL products:${IMAGE_TAG}
-                        trivy image --exit-code 1 --severity HIGH,CRITICAL user:${IMAGE_TAG}
-                        trivy image --exit-code 1 --severity HIGH,CRITICAL cart:${IMAGE_TAG}
-                        trivy image --exit-code 1 --severity HIGH,CRITICAL store-ui:${IMAGE_TAG}
-                    """
+            parallel {
+                stage('Scan: products') {
+                    steps {
+                        sh "trivy image --scanners vuln --exit-code 1 --severity HIGH,CRITICAL products:${IMAGE_TAG}"
+                    }
+                }
+                stage('Scan: user') {
+                    steps {
+                        sh "trivy image --scanners vuln --exit-code 1 --severity HIGH,CRITICAL user:${IMAGE_TAG}"
+                    }
+                }
+                stage('Scan: cart') {
+                    steps {
+                        sh "trivy image --scanners vuln --exit-code 1 --severity HIGH,CRITICAL cart:${IMAGE_TAG}"
+                    }
+                }
+                stage('Scan: store-ui') {
+                    steps {
+                        sh "trivy image --scanners vuln --exit-code 1 --severity HIGH,CRITICAL store-ui:${IMAGE_TAG}"
+                    }
                 }
             }
         }
@@ -110,6 +122,14 @@ pipeline {
                         docker push ${ECR_REGISTRY}/cart:${IMAGE_TAG}
                         docker push ${ECR_REGISTRY}/store-ui:${IMAGE_TAG}
                     """
+
+                    echo "📦 Image digests:"
+                    sh """
+                        docker inspect --format='products: {{index .RepoDigests 0}}' ${ECR_REGISTRY}/products:${IMAGE_TAG}
+                        docker inspect --format='user: {{index .RepoDigests 0}}' ${ECR_REGISTRY}/user:${IMAGE_TAG}
+                        docker inspect --format='cart: {{index .RepoDigests 0}}' ${ECR_REGISTRY}/cart:${IMAGE_TAG}
+                        docker inspect --format='store-ui: {{index .RepoDigests 0}}' ${ECR_REGISTRY}/store-ui:${IMAGE_TAG}
+                    """
                 }
             }
         }
@@ -134,9 +154,14 @@ pipeline {
 
                         git config user.name "Jenkins CI"
                         git config user.email "ci@streamlinepay.com"
-                        git add .
-                        git commit -am "Promote StreamlinePay services to tag ${IMAGE_TAG}"
-                        git push origin ${GITOPS_BRANCH}
+
+                        if ! git diff --quiet; then
+                          git add .
+                          git commit -m "Promote StreamlinePay services to tag ${IMAGE_TAG}"
+                          git push origin ${GITOPS_BRANCH}
+                        else
+                          echo "No changes to commit."
+                        fi
                     """
                 }
             }
