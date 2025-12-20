@@ -108,7 +108,64 @@ pipeline {
             }
         }
 
-        // Push to ECR and GitOps Promotion stages remain unchanged
+        stage('Push to ECR') {
+            when {
+                expression { currentBuild.result in [null, 'SUCCESS', 'UNSTABLE'] }
+            }
+            steps {
+                withCredentials([[
+                    $class: 'AmazonWebServicesCredentialsBinding',
+                    credentialsId: "${AWS_CREDENTIAL_ID}"
+                ]]) {
+                    sh """
+                        aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${ECR_REGISTRY}
+
+                        docker tag products:${IMAGE_TAG} ${ECR_REGISTRY}/products:${IMAGE_TAG}
+                        docker tag user:${IMAGE_TAG} ${ECR_REGISTRY}/user:${IMAGE_TAG}
+                        docker tag cart:${IMAGE_TAG} ${ECR_REGISTRY}/cart:${IMAGE_TAG}
+                        docker tag store-ui:${IMAGE_TAG} ${ECR_REGISTRY}/store-ui:${IMAGE_TAG}
+
+                        docker push ${ECR_REGISTRY}/products:${IMAGE_TAG}
+                        docker push ${ECR_REGISTRY}/user:${IMAGE_TAG}
+                        docker push ${ECR_REGISTRY}/cart:${IMAGE_TAG}
+                        docker push ${ECR_REGISTRY}/store-ui:${IMAGE_TAG}
+                    """
+                }
+            }
+        }
+
+        stage('GitOps Promotion') {
+            when {
+                expression { currentBuild.result == null || currentBuild.result == 'SUCCESS' }
+            }
+            steps {
+                sshagent([GITOPS_CREDENTIAL]) {
+                    sh """
+                        git clone ${GITOPS_REPO} gitops
+                        cd gitops
+                        git checkout ${GITOPS_BRANCH}
+
+                        sed -i.bak "s|image: .*/products:.*|image: ${ECR_REGISTRY}/products:${IMAGE_TAG}|g" products/deployment.yaml
+                        sed -i.bak "s|image: .*/user:.*|image: ${ECR_REGISTRY}/user:${IMAGE_TAG}|g" user/deployment.yaml
+                        sed -i.bak "s|image: .*/cart:.*|image: ${ECR_REGISTRY}/cart:${IMAGE_TAG}|g" cart/deployment.yaml
+                        sed -i.bak "s|image: .*/store-ui:.*|image: ${ECR_REGISTRY}/store-ui:${IMAGE_TAG}|g" store-ui/deployment.yaml
+
+                        rm */*.bak
+
+                        git config user.name "Jenkins CI"
+                        git config user.email "ci@streamlinepay.com"
+
+                        if ! git diff --quiet; then
+                          git add .
+                          git commit -m "Promote StreamlinePay services to tag ${IMAGE_TAG}"
+                          git push origin ${GITOPS_BRANCH}
+                        else
+                          echo "No changes to commit."
+                        fi
+                    """
+                }
+            }
+        }
     }
 
     post {
