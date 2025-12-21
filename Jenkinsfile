@@ -76,7 +76,7 @@ pipeline {
                     sh "docker build -t user-cna-microservice:${IMAGE_TAG} -f user-cna-microservice/Dockerfile user-cna-microservice"
                     retry(3) {
                         sh "docker build -t cart-cna-microservice:${IMAGE_TAG} -f cart-cna-microservice/Dockerfile cart-cna-microservice"
-                    }
+                    }y
                     sh "docker build -t store-ui-cna-microservice:${IMAGE_TAG} -f store-ui-cna-microservice/Dockerfile store-ui-cna-microservice"
                 }
             }
