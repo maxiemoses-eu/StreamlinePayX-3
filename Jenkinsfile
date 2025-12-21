@@ -72,12 +72,12 @@ pipeline {
         stage('Docker Build') {
             steps {
                 script {
-                    sh "docker build -t products-microservice:${IMAGE_TAG} -f products-microservice/Dockerfile products-cna-microservice"
-                    sh "docker build -t user-microservice:${IMAGE_TAG} -f user-microservice/Dockerfile user-cna-microservice"
+                    sh "docker build -t ${ECR_REGISTRY}/streamlinepay-prod-products-cna-microservice:${IMAGE_TAG} -f products-microservice/Dockerfile products-microservice"
+                    sh "docker build -t ${ECR_REGISTRY}/streamlinepay-prod-users-cna-microservice:${IMAGE_TAG} -f user-microservice/Dockerfile user-microservice"
                     retry(3) {
-                        sh "docker build -t cart-microservice:${IMAGE_TAG} -f cart-microservice/Dockerfile cart-cna-microservice"
-                    }y
-                    sh "docker build -t store-ui:${IMAGE_TAG} -f store-ui/Dockerfile store-ui-cna-microservice"
+                        sh "docker build -t ${ECR_REGISTRY}/streamlinepay-prod-cart-cna-microservice:${IMAGE_TAG} -f cart-microservice/Dockerfile cart-microservice"
+                    }
+                    sh "docker build -t ${ECR_REGISTRY}/streamlinepay-prod-store-ui:${IMAGE_TAG} -f store-ui-microservice/Dockerfile store-ui-microservice"
                 }
             }
         }
@@ -89,7 +89,13 @@ pipeline {
                     echo "📥 Using Cached Vulnerability Database..."
                     sh "trivy image --cache-dir ${TRIVY_CACHE} --download-db-only --quiet"
 
-                    def apps = ['products', 'user', 'cart', 'store-ui']
+                    def apps = [
+                        "streamlinepay-prod-products-cna-microservice",
+                        "streamlinepay-prod-users-cna-microservice",
+                        "streamlinepay-prod-cart-cna-microservice",
+                        "streamlinepay-prod-store-ui"
+                    ]
+
                     for (app in apps) {
                         echo "🔍 Scanning ${app}..."
                         catchError(buildResult: 'UNSTABLE', stageResult: 'FAILURE') {
@@ -100,7 +106,7 @@ pipeline {
                                   --exit-code 1 \
                                   --severity HIGH,CRITICAL \
                                   --no-progress \
-                                  ${app}:${IMAGE_TAG}
+                                  ${ECR_REGISTRY}/${app}:${IMAGE_TAG}
                             """
                         }
                         echo "✅ Trivy scan completed for ${app}:${IMAGE_TAG}"
@@ -122,14 +128,9 @@ pipeline {
                     sh """
                         aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${ECR_REGISTRY}
 
-                        docker tag products:${IMAGE_TAG} ${ECR_REGISTRY}/streamlinepay-prod-products-microservice:${IMAGE_TAG}
-                        docker tag user:${IMAGE_TAG} ${ECR_REGISTRY}/streamlinepay-prod-users-microservice:${IMAGE_TAG}
-                        docker tag cart:${IMAGE_TAG} ${ECR_REGISTRY}/streamlinepay-prod-cart-microservice:${IMAGE_TAG}
-                        docker tag store-ui:${IMAGE_TAG} ${ECR_REGISTRY}/streamlinepay-prod-store-ui:${IMAGE_TAG}
-
-                        docker push ${ECR_REGISTRY}/streamlinepay-prod-products-microservice:${IMAGE_TAG}
-                        docker push ${ECR_REGISTRY}/streamlinepay-prod-users-microservice:${IMAGE_TAG}
-                        docker push ${ECR_REGISTRY}/streamlinepay-prod-cart-microservice:${IMAGE_TAG}
+                        docker push ${ECR_REGISTRY}/streamlinepay-prod-products-cna-microservice:${IMAGE_TAG}
+                        docker push ${ECR_REGISTRY}/streamlinepay-prod-users-cna-microservice:${IMAGE_TAG}
+                        docker push ${ECR_REGISTRY}/streamlinepay-prod-cart-cna-microservice:${IMAGE_TAG}
                         docker push ${ECR_REGISTRY}/streamlinepay-prod-store-ui:${IMAGE_TAG}
                     """
                 }
