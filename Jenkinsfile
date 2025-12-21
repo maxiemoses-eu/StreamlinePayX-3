@@ -72,12 +72,12 @@ pipeline {
         stage('Docker Build') {
             steps {
                 script {
-                    sh "docker build -t products:${IMAGE_TAG} -f products-microservice/Dockerfile products-microservice"
-                    sh "docker build -t user:${IMAGE_TAG} -f user-microservice/Dockerfile user-microservice"
+                    sh "docker build -t products-cna-microservice:${IMAGE_TAG} -f products-cna-microservice/Dockerfile products-cna-microservice"
+                    sh "docker build -t user-cna-microservice:${IMAGE_TAG} -f user-cna-microservice/Dockerfile user-cna-microservice"
                     retry(3) {
-                        sh "docker build -t cart:${IMAGE_TAG} -f cart-microservice/Dockerfile cart-microservice"
+                        sh "docker build -t cart-cna-microservice:${IMAGE_TAG} -f cart-cna-microservice/Dockerfile cart-cna-microservice"
                     }
-                    sh "docker build -t store-ui:${IMAGE_TAG} -f store-ui-microservice/Dockerfile store-ui-microservice"
+                    sh "docker build -t store-ui-cna-microservice:${IMAGE_TAG} -f store-ui-cna-microservice/Dockerfile store-ui-cna-microservice"
                 }
             }
         }
