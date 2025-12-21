@@ -72,12 +72,12 @@ pipeline {
         stage('Docker Build') {
             steps {
                 script {
-                    sh "docker build -t ${ECR_REGISTRY}/streamlinepay-prod-products-cna-microservice:${IMAGE_TAG} -f products-microservice/Dockerfile products-microservice"
-                    sh "docker build -t ${ECR_REGISTRY}/streamlinepay-prod-users-cna-microservice:${IMAGE_TAG} -f user-microservice/Dockerfile user-microservice"
+                    sh "docker build -t products-microservice:${IMAGE_TAG} -f products-microservice/Dockerfile products-microservice"
+                    sh "docker build -t users-microservice:${IMAGE_TAG} -f user-microservice/Dockerfile user-microservice"
                     retry(3) {
-                        sh "docker build -t ${ECR_REGISTRY}/streamlinepay-prod-cart-cna-microservice:${IMAGE_TAG} -f cart-microservice/Dockerfile cart-microservice"
+                        sh "docker build -t cart-microservice:${IMAGE_TAG} -f cart-microservice/Dockerfile cart-microservice"
                     }
-                    sh "docker build -t ${ECR_REGISTRY}/streamlinepay-prod-store-ui:${IMAGE_TAG} -f store-ui-microservice/Dockerfile store-ui-microservice"
+                    sh "docker build -t store-ui:${IMAGE_TAG} -f store-ui-microservice/Dockerfile store-ui-microservice"
                 }
             }
         }
@@ -89,15 +89,15 @@ pipeline {
                     echo "📥 Using Cached Vulnerability Database..."
                     sh "trivy image --cache-dir ${TRIVY_CACHE} --download-db-only --quiet"
 
-                    def apps = [
-                        "streamlinepay-prod-products-cna-microservice",
-                        "streamlinepay-prod-users-cna-microservice",
-                        "streamlinepay-prod-cart-cna-microservice",
-                        "streamlinepay-prod-store-ui"
+                    def images = [
+                        "products-microservice",
+                        "users-microservice",
+                        "cart-microservice",
+                        "store-ui"
                     ]
 
-                    for (app in apps) {
-                        echo "🔍 Scanning ${app}..."
+                    for (img in images) {
+                        echo "🔍 Scanning ${img}:${IMAGE_TAG}..."
                         catchError(buildResult: 'UNSTABLE', stageResult: 'FAILURE') {
                             sh """
                                 trivy image \
@@ -106,10 +106,10 @@ pipeline {
                                   --exit-code 1 \
                                   --severity HIGH,CRITICAL \
                                   --no-progress \
-                                  ${ECR_REGISTRY}/${app}:${IMAGE_TAG}
+                                  ${img}:${IMAGE_TAG}
                             """
                         }
-                        echo "✅ Trivy scan completed for ${app}:${IMAGE_TAG}"
+                        echo "✅ Trivy scan completed for ${img}:${IMAGE_TAG}"
                         sh "sleep 2"
                     }
                 }
@@ -128,9 +128,14 @@ pipeline {
                     sh """
                         aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${ECR_REGISTRY}
 
-                        docker push ${ECR_REGISTRY}/streamlinepay-prod-products-cna-microservice:${IMAGE_TAG}
-                        docker push ${ECR_REGISTRY}/streamlinepay-prod-users-cna-microservice:${IMAGE_TAG}
-                        docker push ${ECR_REGISTRY}/streamlinepay-prod-cart-cna-microservice:${IMAGE_TAG}
+                        docker tag products-microservice:${IMAGE_TAG} ${ECR_REGISTRY}/streamlinepay-prod-products-microservice:${IMAGE_TAG}
+                        docker tag users-microservice:${IMAGE_TAG} ${ECR_REGISTRY}/streamlinepay-prod-users-microservice:${IMAGE_TAG}
+                        docker tag cart-microservice:${IMAGE_TAG} ${ECR_REGISTRY}/streamlinepay-prod-cart-microservice:${IMAGE_TAG}
+                        docker tag store-ui:${IMAGE_TAG} ${ECR_REGISTRY}/streamlinepay-prod-store-ui:${IMAGE_TAG}
+
+                        docker push ${ECR_REGISTRY}/streamlinepay-prod-products-microservice:${IMAGE_TAG}
+                        docker push ${ECR_REGISTRY}/streamlinepay-prod-users-microservice:${IMAGE_TAG}
+                        docker push ${ECR_REGISTRY}/streamlinepay-prod-cart-microservice:${IMAGE_TAG}
                         docker push ${ECR_REGISTRY}/streamlinepay-prod-store-ui:${IMAGE_TAG}
                     """
                 }
@@ -148,9 +153,9 @@ pipeline {
                         cd gitops
                         git checkout ${GITOPS_BRANCH}
 
-                        sed -i.bak "s|image: .*/products:.*|image: ${ECR_REGISTRY}/streamlinepay-prod-products-cna-microservice:${IMAGE_TAG}|g" products/deployment.yaml
-                        sed -i.bak "s|image: .*/user:.*|image: ${ECR_REGISTRY}/streamlinepay-prod-users-cna-microservice:${IMAGE_TAG}|g" user/deployment.yaml
-                        sed -i.bak "s|image: .*/cart:.*|image: ${ECR_REGISTRY}/streamlinepay-prod-cart-cna-microservice:${IMAGE_TAG}|g" cart/deployment.yaml
+                        sed -i.bak "s|image: .*/products:.*|image: ${ECR_REGISTRY}/streamlinepay-prod-products-microservice:${IMAGE_TAG}|g" products/deployment.yaml
+                        sed -i.bak "s|image: .*/user:.*|image: ${ECR_REGISTRY}/streamlinepay-prod-users-microservice:${IMAGE_TAG}|g" user/deployment.yaml
+                        sed -i.bak "s|image: .*/cart:.*|image: ${ECR_REGISTRY}/streamlinepay-prod-cart-microservice:${IMAGE_TAG}|g" cart/deployment.yaml
                         sed -i.bak "s|image: .*/store-ui:.*|image: ${ECR_REGISTRY}/streamlinepay-prod-store-ui:${IMAGE_TAG}|g" store-ui/deployment.yaml
 
                         rm */*.bak
