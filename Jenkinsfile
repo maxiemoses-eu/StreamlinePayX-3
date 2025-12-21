@@ -72,12 +72,12 @@ pipeline {
         stage('Docker Build') {
             steps {
                 script {
-                    sh "docker build -t products-cna-microservice:${IMAGE_TAG} -f products-cna-microservice/Dockerfile products-cna-microservice"
-                    sh "docker build -t user-cna-microservice:${IMAGE_TAG} -f user-cna-microservice/Dockerfile user-cna-microservice"
+                    sh "docker build -t products-microservice:${IMAGE_TAG} -f products-microservice/Dockerfile products-cna-microservice"
+                    sh "docker build -t user-microservice:${IMAGE_TAG} -f user-microservice/Dockerfile user-cna-microservice"
                     retry(3) {
-                        sh "docker build -t cart-cna-microservice:${IMAGE_TAG} -f cart-cna-microservice/Dockerfile cart-cna-microservice"
+                        sh "docker build -t cart-microservice:${IMAGE_TAG} -f cart-microservice/Dockerfile cart-cna-microservice"
                     }y
-                    sh "docker build -t store-ui-cna-microservice:${IMAGE_TAG} -f store-ui-cna-microservice/Dockerfile store-ui-cna-microservice"
+                    sh "docker build -t store-ui:${IMAGE_TAG} -f store-ui/Dockerfile store-ui-cna-microservice"
                 }
             }
         }
@@ -122,14 +122,14 @@ pipeline {
                     sh """
                         aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${ECR_REGISTRY}
 
-                        docker tag products:${IMAGE_TAG} ${ECR_REGISTRY}/streamlinepay-prod-products-cna-microservice:${IMAGE_TAG}
-                        docker tag user:${IMAGE_TAG} ${ECR_REGISTRY}/streamlinepay-prod-users-cna-microservice:${IMAGE_TAG}
-                        docker tag cart:${IMAGE_TAG} ${ECR_REGISTRY}/streamlinepay-prod-cart-cna-microservice:${IMAGE_TAG}
+                        docker tag products:${IMAGE_TAG} ${ECR_REGISTRY}/streamlinepay-prod-products-microservice:${IMAGE_TAG}
+                        docker tag user:${IMAGE_TAG} ${ECR_REGISTRY}/streamlinepay-prod-users-microservice:${IMAGE_TAG}
+                        docker tag cart:${IMAGE_TAG} ${ECR_REGISTRY}/streamlinepay-prod-cart-microservice:${IMAGE_TAG}
                         docker tag store-ui:${IMAGE_TAG} ${ECR_REGISTRY}/streamlinepay-prod-store-ui:${IMAGE_TAG}
 
-                        docker push ${ECR_REGISTRY}/streamlinepay-prod-products-cna-microservice:${IMAGE_TAG}
-                        docker push ${ECR_REGISTRY}/streamlinepay-prod-users-cna-microservice:${IMAGE_TAG}
-                        docker push ${ECR_REGISTRY}/streamlinepay-prod-cart-cna-microservice:${IMAGE_TAG}
+                        docker push ${ECR_REGISTRY}/streamlinepay-prod-products-microservice:${IMAGE_TAG}
+                        docker push ${ECR_REGISTRY}/streamlinepay-prod-users-microservice:${IMAGE_TAG}
+                        docker push ${ECR_REGISTRY}/streamlinepay-prod-cart-microservice:${IMAGE_TAG}
                         docker push ${ECR_REGISTRY}/streamlinepay-prod-store-ui:${IMAGE_TAG}
                     """
                 }
