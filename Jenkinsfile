@@ -3,21 +3,23 @@ pipeline {
 
     environment {
         AWS_REGION          = 'us-west-2'
-        ECR_REGISTRY        = '65959164050.dkr.ecr.us-west-2.amazonaws.com'
+        ECR_REGISTRY        = '659591640509.dkr.ecr.us-west-2.amazonaws.com'
         IMAGE_TAG           = "${env.GIT_COMMIT ? env.GIT_COMMIT.take(7) : env.BUILD_NUMBER}"
         GITOPS_REPO         = 'git@github.com/maxiemoses-eu/agrocd-yaml.git'
         GITOPS_BRANCH       = 'main'
         GITOPS_CREDENTIAL   = 'gitops-ssh-key'
         AWS_CREDENTIAL_ID   = 'AWS_ECR_PUSH_CREDENTIALS'
 
-        // CACHE DIRECTORIES
         TRIVY_CACHE         = "${WORKSPACE}/.trivycache"
         NPM_CACHE           = "${WORKSPACE}/.npm"
     }
 
     stages {
         stage('Checkout') {
-            steps { checkout scm }
+            steps {
+                cleanWs()
+                checkout scm
+            }
         }
 
         stage('Build & Test Microservices') {
@@ -120,15 +122,15 @@ pipeline {
                     sh """
                         aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${ECR_REGISTRY}
 
-                        docker tag products:${IMAGE_TAG} ${ECR_REGISTRY}/products:${IMAGE_TAG}
-                        docker tag user:${IMAGE_TAG} ${ECR_REGISTRY}/user:${IMAGE_TAG}
-                        docker tag cart:${IMAGE_TAG} ${ECR_REGISTRY}/cart:${IMAGE_TAG}
-                        docker tag store-ui:${IMAGE_TAG} ${ECR_REGISTRY}/store-ui:${IMAGE_TAG}
+                        docker tag products:${IMAGE_TAG} ${ECR_REGISTRY}/streamlinepay-prod-products-cna-microservice:${IMAGE_TAG}
+                        docker tag user:${IMAGE_TAG} ${ECR_REGISTRY}/streamlinepay-prod-users-cna-microservice:${IMAGE_TAG}
+                        docker tag cart:${IMAGE_TAG} ${ECR_REGISTRY}/streamlinepay-prod-cart-cna-microservice:${IMAGE_TAG}
+                        docker tag store-ui:${IMAGE_TAG} ${ECR_REGISTRY}/streamlinepay-prod-store-ui:${IMAGE_TAG}
 
-                        docker push ${ECR_REGISTRY}/products:${IMAGE_TAG}
-                        docker push ${ECR_REGISTRY}/user:${IMAGE_TAG}
-                        docker push ${ECR_REGISTRY}/cart:${IMAGE_TAG}
-                        docker push ${ECR_REGISTRY}/store-ui:${IMAGE_TAG}
+                        docker push ${ECR_REGISTRY}/streamlinepay-prod-products-cna-microservice:${IMAGE_TAG}
+                        docker push ${ECR_REGISTRY}/streamlinepay-prod-users-cna-microservice:${IMAGE_TAG}
+                        docker push ${ECR_REGISTRY}/streamlinepay-prod-cart-cna-microservice:${IMAGE_TAG}
+                        docker push ${ECR_REGISTRY}/streamlinepay-prod-store-ui:${IMAGE_TAG}
                     """
                 }
             }
@@ -145,10 +147,10 @@ pipeline {
                         cd gitops
                         git checkout ${GITOPS_BRANCH}
 
-                        sed -i.bak "s|image: .*/products:.*|image: ${ECR_REGISTRY}/products:${IMAGE_TAG}|g" products/deployment.yaml
-                        sed -i.bak "s|image: .*/user:.*|image: ${ECR_REGISTRY}/user:${IMAGE_TAG}|g" user/deployment.yaml
-                        sed -i.bak "s|image: .*/cart:.*|image: ${ECR_REGISTRY}/cart:${IMAGE_TAG}|g" cart/deployment.yaml
-                        sed -i.bak "s|image: .*/store-ui:.*|image: ${ECR_REGISTRY}/store-ui:${IMAGE_TAG}|g" store-ui/deployment.yaml
+                        sed -i.bak "s|image: .*/products:.*|image: ${ECR_REGISTRY}/streamlinepay-prod-products-cna-microservice:${IMAGE_TAG}|g" products/deployment.yaml
+                        sed -i.bak "s|image: .*/user:.*|image: ${ECR_REGISTRY}/streamlinepay-prod-users-cna-microservice:${IMAGE_TAG}|g" user/deployment.yaml
+                        sed -i.bak "s|image: .*/cart:.*|image: ${ECR_REGISTRY}/streamlinepay-prod-cart-cna-microservice:${IMAGE_TAG}|g" cart/deployment.yaml
+                        sed -i.bak "s|image: .*/store-ui:.*|image: ${ECR_REGISTRY}/streamlinepay-prod-store-ui:${IMAGE_TAG}|g" store-ui/deployment.yaml
 
                         rm */*.bak
 
