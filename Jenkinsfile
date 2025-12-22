@@ -63,10 +63,11 @@ pipeline {
         stage('Docker Build') {
             steps {
                 script {
-                    sh "docker build -t products-microservice:${IMAGE_TAG} -f products-microservice/Dockerfile products-microservice"
-                    sh "docker build -t users-microservice:${IMAGE_TAG} -f user-microservice/Dockerfile user-microservice"
-                    sh "docker build -t store-ui:${IMAGE_TAG} -f store-ui-microservice/Dockerfile store-ui-microservice"
-                    sh "docker build -t cart-microservice:${IMAGE_TAG} -f cart-microservice/Dockerfile cart-microservice"
+                    // UPDATED: Now building with names that match ECR repositories exactly
+                    sh "docker build -t streamlinepay-prod-products-microservice:${IMAGE_TAG} -f products-microservice/Dockerfile products-microservice"
+                    sh "docker build -t streamlinepay-prod-users-microservice:${IMAGE_TAG} -f user-microservice/Dockerfile user-microservice"
+                    sh "docker build -t streamlinepay-prod-cart-microservice:${IMAGE_TAG} -f cart-microservice/Dockerfile cart-microservice"
+                    sh "docker build -t streamlinepay-prod-store-ui:${IMAGE_TAG} -f store-ui-microservice/Dockerfile store-ui-microservice"
                 }
             }
         }
@@ -76,10 +77,15 @@ pipeline {
                 script {
                     sh "mkdir -p ${TRIVY_CACHE}"
                     echo "📥 Updating Vulnerability Database..."
-                    // FIXED: Changed --download-timeout to --timeout to resolve the fatal error
                     sh "trivy image --cache-dir ${TRIVY_CACHE} --download-db-only --quiet --timeout 20m"
 
-                    def images = ["products-microservice", "users-microservice", "cart-microservice", "store-ui"]
+                    // UPDATED: Scanning the newly named images
+                    def images = [
+                        "streamlinepay-prod-products-microservice", 
+                        "streamlinepay-prod-users-microservice", 
+                        "streamlinepay-prod-cart-microservice", 
+                        "streamlinepay-prod-store-ui"
+                    ]
 
                     for (img in images) {
                         echo "🔍 Scanning ${img}:${IMAGE_TAG}..."
@@ -97,20 +103,30 @@ pipeline {
             }
             steps {
                 withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: "${AWS_CREDENTIAL_ID}"]]) {
-                    sh """
-                        aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${ECR_REGISTRY}
+                    script {
+                        sh "aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${ECR_REGISTRY}"
 
-                        # Standardizing repository names for ECR
-                        docker tag products-microservice:${IMAGE_TAG} ${ECR_REGISTRY}/streamlinepay-prod-products-microservice:${IMAGE_TAG}
-                        docker tag users-microservice:${IMAGE_TAG} ${ECR_REGISTRY}/streamlinepay-prod-users-microservice:${IMAGE_TAG}
-                        docker tag cart-microservice:${IMAGE_TAG} ${ECR_REGISTRY}/streamlinepay-prod-cart-microservice:${IMAGE_TAG}
-                        docker tag store-ui:${IMAGE_TAG} ${ECR_REGISTRY}/streamlinepay-prod-store-ui:${IMAGE_TAG}
+                        def ecrImages = [
+                            'streamlinepay-prod-products-microservice',
+                            'streamlinepay-prod-users-microservice',
+                            'streamlinepay-prod-cart-microservice',
+                            'streamlinepay-prod-store-ui'
+                        ]
 
-                        docker push ${ECR_REGISTRY}/streamlinepay-prod-products-microservice:${IMAGE_TAG}
-                        docker push ${ECR_REGISTRY}/streamlinepay-prod-users-microservice:${IMAGE_TAG}
-                        docker push ${ECR_REGISTRY}/streamlinepay-prod-cart-microservice:${IMAGE_TAG}
-                        docker push ${ECR_REGISTRY}/streamlinepay-prod-store-ui:${IMAGE_TAG}
-                    """
+                        ecrImages.each { repoName ->
+                            echo "🚀 Preparing to push ${repoName}..."
+                            
+                            // Ensure repo exists before pushing (Infrastructure as Code approach)
+                            sh """
+                                aws ecr describe-repositories --repository-names ${repoName} --region ${AWS_REGION} || \
+                                aws ecr create-repository --repository-name ${repoName} --region ${AWS_REGION}
+                            """
+
+                            // Tag with registry and push
+                            sh "docker tag ${repoName}:${IMAGE_TAG} ${ECR_REGISTRY}/${repoName}:${IMAGE_TAG}"
+                            sh "docker push ${ECR_REGISTRY}/${repoName}:${IMAGE_TAG}"
+                        }
+                    }
                 }
             }
         }
@@ -126,7 +142,7 @@ pipeline {
                         git clone ${GITOPS_REPO} gitops
                         cd gitops
                         
-                        # Update images in YAML files using the new ECR naming convention
+                        # Update images in YAML files using the matched ECR naming
                         sed -i "s|image: .*/streamlinepay-prod-products-microservice:.*|image: ${ECR_REGISTRY}/streamlinepay-prod-products-microservice:${IMAGE_TAG}|g" products/deployment.yaml
                         sed -i "s|image: .*/streamlinepay-prod-users-microservice:.*|image: ${ECR_REGISTRY}/streamlinepay-prod-users-microservice:${IMAGE_TAG}|g" user/deployment.yaml
                         sed -i "s|image: .*/streamlinepay-prod-cart-microservice:.*|image: ${ECR_REGISTRY}/streamlinepay-prod-cart-microservice:${IMAGE_TAG}|g" cart/deployment.yaml
