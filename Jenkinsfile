@@ -36,7 +36,7 @@ pipeline {
                 }
                 stage('users') {
                     steps {
-                        dir('user-microservice') {
+                        dir('users-microservice') { // MATCHED to GitHub folder name
                             sh 'python3 -m venv venv'
                             sh 'venv/bin/pip install --upgrade pip'
                             retry(3) {
@@ -56,7 +56,7 @@ pipeline {
                 }
                 stage('store-ui') {
                     steps {
-                        dir('store-ui-microservice') {
+                        dir('store-ui-microservice') { // MATCHED to VS Code screenshot
                             retry(3) {
                                 sh 'npm install --cache ${NPM_CACHE} --prefer-offline --legacy-peer-deps'
                             }
@@ -70,9 +70,10 @@ pipeline {
         stage('Docker Build') {
             steps {
                 script {
-                    sh "docker build -t streamlinepay-prod-products-microservice:${IMAGE_TAG} -f products-microservice/Dockerfile products-microservice"
-                    sh "docker build -t streamlinepay-prod-users-microservice:${IMAGE_TAG} -f user-microservice/Dockerfile user-microservice"
-                    sh "docker build -t streamlinepay-prod-cart-microservice:${IMAGE_TAG} -f cart-microservice/Dockerfile cart-microservice"
+                    // MATCHED Tags to ECR Screenshot names
+                    sh "docker build -t streamlinepay-prod-products-cna-microservice:${IMAGE_TAG} -f products-microservice/Dockerfile products-microservice"
+                    sh "docker build -t streamlinepay-prod-users-cna-microservice:${IMAGE_TAG} -f users-microservice/Dockerfile users-microservice"
+                    sh "docker build -t streamlinepay-prod-cart-cna-microservice:${IMAGE_TAG} -f cart-microservice/Dockerfile cart-microservice"
                     sh "docker build -t streamlinepay-prod-store-ui:${IMAGE_TAG} -f store-ui-microservice/Dockerfile store-ui-microservice"
                 }
             }
@@ -85,9 +86,9 @@ pipeline {
                     sh "trivy image --cache-dir ${TRIVY_CACHE} --download-db-only --quiet --timeout 20m"
 
                     def images = [
-                        "streamlinepay-prod-products-microservice", 
-                        "streamlinepay-prod-users-microservice", 
-                        "streamlinepay-prod-cart-microservice", 
+                        "streamlinepay-prod-products-cna-microservice", 
+                        "streamlinepay-prod-users-cna-microservice", 
+                        "streamlinepay-prod-cart-cna-microservice", 
                         "streamlinepay-prod-store-ui"
                     ]
 
@@ -110,17 +111,13 @@ pipeline {
                         sh "aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${ECR_REGISTRY}"
 
                         def ecrImages = [
-                            'streamlinepay-prod-products-microservice',
-                            'streamlinepay-prod-users-microservice',
-                            'streamlinepay-prod-cart-microservice',
+                            'streamlinepay-prod-products-cna-microservice',
+                            'streamlinepay-prod-users-cna-microservice',
+                            'streamlinepay-prod-cart-cna-microservice',
                             'streamlinepay-prod-store-ui'
                         ]
 
                         ecrImages.each { repoName ->
-                            sh """
-                                aws ecr describe-repositories --repository-names ${repoName} --region ${AWS_REGION} || \
-                                aws ecr create-repository --repository-name ${repoName} --region ${AWS_REGION}
-                            """
                             sh "docker tag ${repoName}:${IMAGE_TAG} ${ECR_REGISTRY}/${repoName}:${IMAGE_TAG}"
                             sh "docker push ${ECR_REGISTRY}/${repoName}:${IMAGE_TAG}"
                         }
@@ -140,9 +137,9 @@ pipeline {
                         git clone ${GITOPS_REPO} gitops
                         cd gitops
                         
-                        sed -i "s|image: .*/streamlinepay-prod-products-microservice:.*|image: ${ECR_REGISTRY}/streamlinepay-prod-products-microservice:${IMAGE_TAG}|g" products/deployment.yaml
-                        sed -i "s|image: .*/streamlinepay-prod-users-microservice:.*|image: ${ECR_REGISTRY}/streamlinepay-prod-users-microservice:${IMAGE_TAG}|g" user/deployment.yaml
-                        sed -i "s|image: .*/streamlinepay-prod-cart-microservice:.*|image: ${ECR_REGISTRY}/streamlinepay-prod-cart-microservice:${IMAGE_TAG}|g" cart/deployment.yaml
+                        sed -i "s|image: .*/streamlinepay-prod-products-cna-microservice:.*|image: ${ECR_REGISTRY}/streamlinepay-prod-products-cna-microservice:${IMAGE_TAG}|g" products/deployment.yaml
+                        sed -i "s|image: .*/streamlinepay-prod-users-cna-microservice:.*|image: ${ECR_REGISTRY}/streamlinepay-prod-users-cna-microservice:${IMAGE_TAG}|g" user/deployment.yaml
+                        sed -i "s|image: .*/streamlinepay-prod-cart-cna-microservice:.*|image: ${ECR_REGISTRY}/streamlinepay-prod-cart-cna-microservice:${IMAGE_TAG}|g" cart/deployment.yaml
                         sed -i "s|image: .*/streamlinepay-prod-store-ui:.*|image: ${ECR_REGISTRY}/streamlinepay-prod-store-ui:${IMAGE_TAG}|g" store-ui/deployment.yaml
 
                         git config user.name "Jenkins CI"
