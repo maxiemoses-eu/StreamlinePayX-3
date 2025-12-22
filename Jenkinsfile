@@ -133,9 +133,9 @@ pipeline {
                         docker tag cart-microservice:${IMAGE_TAG} ${ECR_REGISTRY}/streamlinepay-prod-cart-microservice:${IMAGE_TAG}
                         docker tag store-ui:${IMAGE_TAG} ${ECR_REGISTRY}/streamlinepay-prod-store-ui:${IMAGE_TAG}
 
-                        docker push ${ECR_REGISTRY}/streamlinepay-prod-products-microservice:${IMAGE_TAG}
-                        docker push ${ECR_REGISTRY}/streamlinepay-prod-users-microservice:${IMAGE_TAG}
-                        docker push ${ECR_REGISTRY}/streamlinepay-prod-cart-microservice:${IMAGE_TAG}
+                        docker push ${ECR_REGISTRY}/streamlinepay-prod-products-cna-microservice:${IMAGE_TAG}
+                        docker push ${ECR_REGISTRY}/streamlinepay-prod-users-cna-microservice:${IMAGE_TAG}
+                        docker push ${ECR_REGISTRY}/streamlinepay-prod-cart-cna-microservice:${IMAGE_TAG}
                         docker push ${ECR_REGISTRY}/streamlinepay-prod-store-ui:${IMAGE_TAG}
                     """
                 }
