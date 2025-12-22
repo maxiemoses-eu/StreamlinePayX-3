@@ -57,7 +57,6 @@ pipeline {
                 stage('store-ui') {
                     steps {
                         dir('store-ui-microservice') {
-                            // FIXED: Added retry for SSL errors and --legacy-peer-deps for React conflicts
                             retry(3) {
                                 sh 'npm install --cache ${NPM_CACHE} --prefer-offline --legacy-peer-deps'
                             }
@@ -83,7 +82,6 @@ pipeline {
             steps {
                 script {
                     sh "mkdir -p ${TRIVY_CACHE}"
-                    echo "📥 Updating Vulnerability Database..."
                     sh "trivy image --cache-dir ${TRIVY_CACHE} --download-db-only --quiet --timeout 20m"
 
                     def images = [
@@ -94,7 +92,6 @@ pipeline {
                     ]
 
                     for (img in images) {
-                        echo "🔍 Scanning ${img}:${IMAGE_TAG}..."
                         catchError(buildResult: 'UNSTABLE', stageResult: 'FAILURE') {
                             sh "trivy image --cache-dir ${TRIVY_CACHE} --scanners vuln --exit-code 1 --severity HIGH,CRITICAL --no-progress ${img}:${IMAGE_TAG}"
                         }
@@ -120,7 +117,6 @@ pipeline {
                         ]
 
                         ecrImages.each { repoName ->
-                            echo "🚀 Preparing to push ${repoName}..."
                             sh """
                                 aws ecr describe-repositories --repository-names ${repoName} --region ${AWS_REGION} || \
                                 aws ecr create-repository --repository-name ${repoName} --region ${AWS_REGION}
@@ -155,4 +151,13 @@ pipeline {
                         if ! git diff --quiet; then
                           git add .
                           git commit -m "Promote StreamlinePay services to tag ${IMAGE_TAG}"
-                          git push
+                          git push origin ${GITOPS_BRANCH}
+                        else
+                          echo "No changes to commit."
+                        fi
+                    """
+                }
+            }
+        }
+    }
+}
