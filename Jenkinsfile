@@ -5,7 +5,7 @@ pipeline {
         AWS_REGION          = 'us-west-2'
         ECR_REGISTRY        = '659591640509.dkr.ecr.us-west-2.amazonaws.com'
         IMAGE_TAG           = "${env.GIT_COMMIT ? env.GIT_COMMIT.take(7) : env.BUILD_NUMBER}"
-        GITOPS_REPO         = 'git@github.com:maxiemoses-eu/agrocd-yaml.git' // Fixed colon syntax
+        GITOPS_REPO         = 'git@github.com:maxiemoses-eu/agrocd-yaml.git' 
         GITOPS_BRANCH       = 'main'
         GITOPS_CREDENTIAL   = 'gitops-ssh-key'
         AWS_CREDENTIAL_ID   = 'AWS_ECR_PUSH_CREDENTIALS'
@@ -76,7 +76,7 @@ pipeline {
                 script {
                     sh "mkdir -p ${TRIVY_CACHE}"
                     echo "📥 Updating Vulnerability Database..."
-                    // FIX: Changed --download-timeout to --timeout
+                    // FIXED: Changed --download-timeout to --timeout to resolve the fatal error
                     sh "trivy image --cache-dir ${TRIVY_CACHE} --download-db-only --quiet --timeout 20m"
 
                     def images = ["products-microservice", "users-microservice", "cart-microservice", "store-ui"]
@@ -100,7 +100,7 @@ pipeline {
                     sh """
                         aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${ECR_REGISTRY}
 
-                        # Fixed inconsistent repository naming to match ECR structure
+                        # Standardizing repository names for ECR
                         docker tag products-microservice:${IMAGE_TAG} ${ECR_REGISTRY}/streamlinepay-prod-products-microservice:${IMAGE_TAG}
                         docker tag users-microservice:${IMAGE_TAG} ${ECR_REGISTRY}/streamlinepay-prod-users-microservice:${IMAGE_TAG}
                         docker tag cart-microservice:${IMAGE_TAG} ${ECR_REGISTRY}/streamlinepay-prod-cart-microservice:${IMAGE_TAG}
@@ -122,10 +122,11 @@ pipeline {
             steps {
                 sshagent([GITOPS_CREDENTIAL]) {
                     sh """
+                        rm -rf gitops
                         git clone ${GITOPS_REPO} gitops
                         cd gitops
                         
-                        # Update images in YAML files
+                        # Update images in YAML files using the new ECR naming convention
                         sed -i "s|image: .*/streamlinepay-prod-products-microservice:.*|image: ${ECR_REGISTRY}/streamlinepay-prod-products-microservice:${IMAGE_TAG}|g" products/deployment.yaml
                         sed -i "s|image: .*/streamlinepay-prod-users-microservice:.*|image: ${ECR_REGISTRY}/streamlinepay-prod-users-microservice:${IMAGE_TAG}|g" user/deployment.yaml
                         sed -i "s|image: .*/streamlinepay-prod-cart-microservice:.*|image: ${ECR_REGISTRY}/streamlinepay-prod-cart-microservice:${IMAGE_TAG}|g" cart/deployment.yaml
