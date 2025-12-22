@@ -27,16 +27,21 @@ pipeline {
                 stage('products') {
                     steps {
                         dir('products-microservice') {
-                            sh 'npm install --cache ${NPM_CACHE} --prefer-offline'
+                            retry(3) {
+                                sh 'npm install --cache ${NPM_CACHE} --prefer-offline --legacy-peer-deps'
+                            }
                             sh 'npm test || echo "No tests specified"'
                         }
                     }
                 }
-                stage('user') {
+                stage('users') {
                     steps {
                         dir('user-microservice') {
                             sh 'python3 -m venv venv'
-                            sh 'venv/bin/pip install -r requirements.txt'
+                            sh 'venv/bin/pip install --upgrade pip'
+                            retry(3) {
+                                sh 'venv/bin/pip install -r requirements.txt'
+                            }
                             sh 'venv/bin/python -m unittest || echo "No tests defined"'
                         }
                     }
@@ -52,7 +57,10 @@ pipeline {
                 stage('store-ui') {
                     steps {
                         dir('store-ui-microservice') {
-                            sh 'npm install --cache ${NPM_CACHE} --prefer-offline'
+                            // FIXED: Added retry for SSL errors and --legacy-peer-deps for React conflicts
+                            retry(3) {
+                                sh 'npm install --cache ${NPM_CACHE} --prefer-offline --legacy-peer-deps'
+                            }
                             sh 'npm run build'
                         }
                     }
@@ -63,7 +71,6 @@ pipeline {
         stage('Docker Build') {
             steps {
                 script {
-                    // UPDATED: Now building with names that match ECR repositories exactly
                     sh "docker build -t streamlinepay-prod-products-microservice:${IMAGE_TAG} -f products-microservice/Dockerfile products-microservice"
                     sh "docker build -t streamlinepay-prod-users-microservice:${IMAGE_TAG} -f user-microservice/Dockerfile user-microservice"
                     sh "docker build -t streamlinepay-prod-cart-microservice:${IMAGE_TAG} -f cart-microservice/Dockerfile cart-microservice"
@@ -79,7 +86,6 @@ pipeline {
                     echo "📥 Updating Vulnerability Database..."
                     sh "trivy image --cache-dir ${TRIVY_CACHE} --download-db-only --quiet --timeout 20m"
 
-                    // UPDATED: Scanning the newly named images
                     def images = [
                         "streamlinepay-prod-products-microservice", 
                         "streamlinepay-prod-users-microservice", 
@@ -115,14 +121,10 @@ pipeline {
 
                         ecrImages.each { repoName ->
                             echo "🚀 Preparing to push ${repoName}..."
-                            
-                            // Ensure repo exists before pushing (Infrastructure as Code approach)
                             sh """
                                 aws ecr describe-repositories --repository-names ${repoName} --region ${AWS_REGION} || \
                                 aws ecr create-repository --repository-name ${repoName} --region ${AWS_REGION}
                             """
-
-                            // Tag with registry and push
                             sh "docker tag ${repoName}:${IMAGE_TAG} ${ECR_REGISTRY}/${repoName}:${IMAGE_TAG}"
                             sh "docker push ${ECR_REGISTRY}/${repoName}:${IMAGE_TAG}"
                         }
@@ -142,7 +144,6 @@ pipeline {
                         git clone ${GITOPS_REPO} gitops
                         cd gitops
                         
-                        # Update images in YAML files using the matched ECR naming
                         sed -i "s|image: .*/streamlinepay-prod-products-microservice:.*|image: ${ECR_REGISTRY}/streamlinepay-prod-products-microservice:${IMAGE_TAG}|g" products/deployment.yaml
                         sed -i "s|image: .*/streamlinepay-prod-users-microservice:.*|image: ${ECR_REGISTRY}/streamlinepay-prod-users-microservice:${IMAGE_TAG}|g" user/deployment.yaml
                         sed -i "s|image: .*/streamlinepay-prod-cart-microservice:.*|image: ${ECR_REGISTRY}/streamlinepay-prod-cart-microservice:${IMAGE_TAG}|g" cart/deployment.yaml
@@ -154,13 +155,4 @@ pipeline {
                         if ! git diff --quiet; then
                           git add .
                           git commit -m "Promote StreamlinePay services to tag ${IMAGE_TAG}"
-                          git push origin ${GITOPS_BRANCH}
-                        else
-                          echo "No changes to commit."
-                        fi
-                    """
-                }
-            }
-        }
-    }
-}
+                          git push
