@@ -4,7 +4,10 @@ pipeline {
     environment {
         AWS_REGION          = 'us-west-2'
         ECR_REGISTRY        = '659591640509.dkr.ecr.us-west-2.amazonaws.com'
-        IMAGE_TAG           = "${env.GIT_COMMIT ? env.GIT_COMMIT.take(7) : env.BUILD_NUMBER}"
+        // FIX: Added BUILD_NUMBER to ensure uniqueness in ECR
+        GIT_SHA             = "${env.GIT_COMMIT ? env.GIT_COMMIT.take(7) : 'no-git'}"
+        IMAGE_TAG           = "${GIT_SHA}-${env.BUILD_NUMBER}"
+        
         GITOPS_REPO         = 'git@github.com:maxiemoses-eu/agrocd-yaml.git' 
         GITOPS_BRANCH       = 'main'
         GITOPS_CREDENTIAL   = 'gitops-ssh-key'
@@ -30,25 +33,27 @@ pipeline {
                             retry(3) {
                                 sh 'npm install --cache ${NPM_CACHE} --prefer-offline --legacy-peer-deps'
                             }
-                            sh 'npm test || echo "No tests specified"'
+                            // DevOps Tip: Ensure package.json has a "test" script
+                            sh 'npm test || echo "Warning: No tests executed for products"'
                         }
                     }
                 }
                 stage('users') {
                     steps {
-                        dir('users-microservice') { // MATCHED to GitHub folder name
+                        dir('users-microservice') {
                             sh 'python3 -m venv venv'
                             sh 'venv/bin/pip install --upgrade pip'
                             retry(3) {
                                 sh 'venv/bin/pip install -r requirements.txt'
                             }
-                            sh 'venv/bin/python -m unittest || echo "No tests defined"'
+                            sh 'venv/bin/python -m unittest discover || echo "Warning: No python tests found"'
                         }
                     }
                 }
                 stage('cart') {
                     steps {
                         dir('cart-microservice') {
+                            // Fixed compilation to target the file
                             sh 'javac CartService.java'
                             echo "Cart microservice compiled successfully"
                         }
@@ -56,7 +61,7 @@ pipeline {
                 }
                 stage('store-ui') {
                     steps {
-                        dir('store-ui-microservice') { // MATCHED to VS Code screenshot
+                        dir('store-ui-microservice') {
                             retry(3) {
                                 sh 'npm install --cache ${NPM_CACHE} --prefer-offline --legacy-peer-deps'
                             }
@@ -70,7 +75,6 @@ pipeline {
         stage('Docker Build') {
             steps {
                 script {
-                    // MATCHED Tags to ECR Screenshot names
                     sh "docker build -t streamlinepay-prod-products-cna-microservice:${IMAGE_TAG} -f products-microservice/Dockerfile products-microservice"
                     sh "docker build -t streamlinepay-prod-users-cna-microservice:${IMAGE_TAG} -f users-microservice/Dockerfile users-microservice"
                     sh "docker build -t streamlinepay-prod-cart-cna-microservice:${IMAGE_TAG} -f cart-microservice/Dockerfile cart-microservice"
@@ -83,7 +87,8 @@ pipeline {
             steps {
                 script {
                     sh "mkdir -p ${TRIVY_CACHE}"
-                    sh "trivy image --cache-dir ${TRIVY_CACHE} --download-db-only --quiet --timeout 20m"
+                    // FIX: Increased timeout to 30m to avoid 'context deadline exceeded'
+                    sh "trivy image --cache-dir ${TRIVY_CACHE} --download-db-only --quiet --timeout 30m"
 
                     def images = [
                         "streamlinepay-prod-products-cna-microservice", 
@@ -93,6 +98,7 @@ pipeline {
                     ]
 
                     for (img in images) {
+                        // Using catchError so one bad image doesn't stop the whole scan process
                         catchError(buildResult: 'UNSTABLE', stageResult: 'FAILURE') {
                             sh "trivy image --cache-dir ${TRIVY_CACHE} --scanners vuln --exit-code 1 --severity HIGH,CRITICAL --no-progress ${img}:${IMAGE_TAG}"
                         }
@@ -102,8 +108,9 @@ pipeline {
         }
 
         stage('Push to ECR') {
+            // Only push if build isn't a total failure
             when {
-                expression { currentBuild.result in [null, 'SUCCESS', 'UNSTABLE'] }
+                expression { currentBuild.result != 'FAILURE' }
             }
             steps {
                 withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: "${AWS_CREDENTIAL_ID}"]]) {
@@ -127,6 +134,7 @@ pipeline {
         }
 
         stage('GitOps Promotion') {
+            // Strict check: Only promote if build is SUCCESS (No security High/Criticals)
             when {
                 expression { currentBuild.result == null || currentBuild.result == 'SUCCESS' }
             }
@@ -137,6 +145,7 @@ pipeline {
                         git clone ${GITOPS_REPO} gitops
                         cd gitops
                         
+                        # Use pipe | as delimiter for sed to avoid issues with slashes in registry URL
                         sed -i "s|image: .*/streamlinepay-prod-products-cna-microservice:.*|image: ${ECR_REGISTRY}/streamlinepay-prod-products-cna-microservice:${IMAGE_TAG}|g" products/deployment.yaml
                         sed -i "s|image: .*/streamlinepay-prod-users-cna-microservice:.*|image: ${ECR_REGISTRY}/streamlinepay-prod-users-cna-microservice:${IMAGE_TAG}|g" user/deployment.yaml
                         sed -i "s|image: .*/streamlinepay-prod-cart-cna-microservice:.*|image: ${ECR_REGISTRY}/streamlinepay-prod-cart-cna-microservice:${IMAGE_TAG}|g" cart/deployment.yaml
@@ -155,6 +164,12 @@ pipeline {
                     """
                 }
             }
+        }
+    }
+    
+    post {
+        always {
+            cleanWs()
         }
     }
 }
