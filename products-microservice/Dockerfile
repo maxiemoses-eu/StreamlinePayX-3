@@ -1,26 +1,30 @@
-# Use an official Node.js image as the base
-# Pinning to alpine3.20 or 3.21 is often safer than the "latest" alpine
-FROM node:20-alpine3.21
-
-# Set the working directory inside the container
+# STAGE 1: Build (The "Kitchen")
+# We use Alpine here to have access to npm and the shell
+FROM node:20-alpine AS build
 WORKDIR /app
 
-# FIX: Update the package index and upgrade packages to fix OS-level vulnerabilities
-# This is the most important line for passing the Trivy scan!
+# Upgrade Alpine here just to keep the build environment safe
 RUN apk update && apk upgrade --no-cache
 
-# Copy package.json and package-lock.json first
 COPY package*.json ./
-
-# Install application dependencies 
-# Added --legacy-peer-deps to match your Jenkins pipeline environment
 RUN npm install --legacy-peer-deps
-
-# Copy the rest of the application code
 COPY . .
 
-# Expose the port the app runs on (StreamlinePay products use 3001)
+# If you have a build step (like TypeScript), run it here:
+# RUN npm run build
+
+# STAGE 2: Runtime (The "Dining Room")
+# This image has NO shell and NO OS vulnerabilities. 
+# It only contains the Node.js runtime.
+FROM gcr.io/distroless/nodejs20-debian12
+WORKDIR /app
+
+# Copy ONLY the files needed to run the app from the build stage
+COPY --from=build /app /app
+
+# StreamlinePay products service runs on 3001
 EXPOSE 3001
 
-# Define the command to run the application
-CMD [ "npm", "start" ]
+# IMPORTANT: In distroless, you don't use "npm start" because 
+# there is no 'npm' or 'sh' inside the image. You must call node directly.
+CMD ["index.js"]
