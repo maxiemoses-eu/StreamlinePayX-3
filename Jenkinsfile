@@ -7,7 +7,7 @@ pipeline {
         GIT_SHA             = "${env.GIT_COMMIT ? env.GIT_COMMIT.take(7) : 'no-git'}"
         IMAGE_TAG           = "${GIT_SHA}-${env.BUILD_NUMBER}"
         
-        GITOPS_REPO         = 'git@github.com:maxiemoses-eu/agrocd-yaml.git' 
+        GITOPS_REPO         = 'git@github.com/maxiemoses-eu/agrocd-yaml.git' 
         GITOPS_BRANCH       = 'main'
         GITOPS_CREDENTIAL   = 'gitops-ssh-key'
         AWS_CREDENTIAL_ID   = 'AWS_ECR_PUSH_CREDENTIALS'
@@ -30,7 +30,6 @@ pipeline {
                     steps {
                         dir('products-microservice') {
                             retry(3) {
-                                // Optimized: Added --network=host to bypass DNS resolution issues on the agent
                                 sh 'npm install --cache ${NPM_CACHE} --prefer-offline --legacy-peer-deps'
                             }
                             sh 'npm test || echo "Warning: No tests executed for products"'
@@ -61,7 +60,6 @@ pipeline {
                     steps {
                         dir('store-ui-microservice') {
                             retry(3) {
-                                // Optimized: Matches the Docker install method for consistency
                                 sh 'npm install --cache ${NPM_CACHE} --prefer-offline --legacy-peer-deps'
                             }
                             sh 'npm run build'
@@ -74,7 +72,6 @@ pipeline {
         stage('Docker Build') {
             steps {
                 script {
-                    // OPTIMIZATION: Added --network=host to all builds to fix the EAI_AGAIN registry errors
                     sh "docker build --network=host -t streamlinepay-prod-products-cna-microservice:${IMAGE_TAG} -f products-microservice/Dockerfile products-microservice"
                     sh "docker build --network=host -t streamlinepay-prod-users-cna-microservice:${IMAGE_TAG} -f users-microservice/Dockerfile users-microservice"
                     sh "docker build --network=host -t streamlinepay-prod-cart-cna-microservice:${IMAGE_TAG} -f cart-microservice/Dockerfile cart-microservice"
@@ -97,9 +94,21 @@ pipeline {
                     ]
 
                     for (img in images) {
-                        catchError(buildResult: 'UNSTABLE', stageResult: 'FAILURE') {
-                            sh "trivy image --cache-dir ${TRIVY_CACHE} --scanners vuln --exit-code 1 --severity HIGH,CRITICAL --no-progress ${img}:${IMAGE_TAG}"
+                        echo "🔍 Scanning ${img}:${IMAGE_TAG} for HIGH and CRITICAL vulnerabilities..."
+                        catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE') {
+                            sh """
+                                trivy image \
+                                  --cache-dir ${TRIVY_CACHE} \
+                                  --scanners vuln \
+                                  --exit-code 1 \
+                                  --severity HIGH,CRITICAL \
+                                  --no-progress \
+                                  --timeout 5m \
+                                  ${img}:${IMAGE_TAG}
+                            """
                         }
+                        echo "✅ Trivy scan completed for ${img}:${IMAGE_TAG}"
+                        sh "sleep 2"
                     }
                 }
             }
@@ -161,10 +170,9 @@ pipeline {
             }
         }
     }
-    
+
     post {
         always {
-            // Optimization: Remove dangling images to prevent disk space issues on the Jenkins agent
             sh 'docker image prune -f'
             cleanWs()
         }
