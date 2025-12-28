@@ -1,7 +1,6 @@
-// products/server.js
 const express = require('express');
 const app = express();
-const port = 3001; // Runs on port 3001
+const port = 3001;
 
 const products = [
   { id: 1, name: 'Women Kurta, Pyjama & Dupatta Set Pure Cotton', price: 27, rating: 4.3, image: 'kurta.jpg' },
@@ -10,10 +9,15 @@ const products = [
   { id: 4, name: 'realme 9i (Prism Black, 128 GB) (6 GB RAM)', price: 423, rating: 3.9, image: 'phone.jpg' },
 ];
 
+// CORS
 app.use((req, res, next) => {
-    // Enable CORS for the frontend (store-ui)
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    next();
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  next();
+});
+
+// ✅ HEALTH CHECK (THIS FIXES EVERYTHING)
+app.get('/health', (req, res) => {
+  res.status(200).json({ status: 'ok' });
 });
 
 app.get('/api/v1/products', (req, res) => {
@@ -22,5 +26,5 @@ app.get('/api/v1/products', (req, res) => {
 });
 
 app.listen(port, () => {
-  console.log(`Products service listening at http://localhost:${port}`);
+  console.log(`Products service listening on port ${port}`);
 });
