@@ -1,19 +1,11 @@
 {
   "name": "products-microservice",
   "version": "1.0.0",
-  "description": "Products microservice for StreamlinePay",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js",
-    "test": "echo \"Error: no test specified\" && exit 0"
+    "start": "node server.js"
   },
-  "author": "Maxie Moses Adams",
-  "license": "MIT",
   "dependencies": {
     "express": "^4.21.2"
-  },
-  "overrides": {
-    "cross-spawn": "^7.0.5",
-    "glob": "^11.0.0"
   }
 }
