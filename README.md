@@ -68,11 +68,11 @@ https://github.com/maxiemoses-eu/StreamlinePayX-3
 
 GitOps / Deployment Manifests:
 
-https://github.com/maxiemoses-eu/agrocd-yaml
+https://github.com/maxiemoses-eu/agrocd-yamlgit
 
 Iac Repository: 
 
-https://github.com/maxiemoses-eu/agrocd-yaml
+https://github.com/maxiemoses-eu/stream-infra-clean
 
 
 
