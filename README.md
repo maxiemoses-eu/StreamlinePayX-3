@@ -2,10 +2,6 @@
 
 > Production-grade microservices payment platform with automated CI/CD, GitOps deployments, and enterprise-scale security scanning.
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Build Status](https://img.shields.io/badge/build-passing-brightgreen)](https://github.com/maxiemoses-eu/StreamlinePayX-3)
-[![AWS](https://img.shields.io/badge/AWS-EKS%20|%20ECR-FF9900?logo=amazon-aws&logoColor=white)](https://aws.amazon.com)
-[![Kubernetes](https://img.shields.io/badge/Kubernetes-1.27+-326CE5?logo=kubernetes&logoColor=white)](https://kubernetes.io)
 
 ## Overview
 
@@ -15,7 +11,7 @@ StreamlinePay is a **cloud-native, production-ready payment processing system** 
 
 ---
 
-## Table of Contents
+## Contents
 
 - [Architecture](#architecture)
 - [Tech Stack](#tech-stack)
