@@ -2,26 +2,6 @@
 
 Production-grade microservices payment platform. Rebuilt from a fragile deployment into a fully automated, secure, and scalable system using Kubernetes, GitOps, and security-first CI/CD.
 
-## Architecture
-
-```
-┌─────────────────────────────────────────┐
-│         React Store UI + Nginx          │
-└────────────────┬────────────────────────┘
-                 │
-    ┌────┬──────┴──────┬────┐
-    │    │             │    │
-┌───▼─┐┌─▼──┐┌────┐┌──▼───┐
-│Prod ││User││Cart││Store │
-│Node ││Py  ││Java││React │
-└───┬─┘└─┬──┘└─┬──┘└──┬───┘
-    │    │     │      │
-    └────┴─────┴──────┘
-          │
-       ┌──▼──┐
-       │  DB │
-       └─────┘
-```
 
 Four microservices (Node.js, Python, Java, React) running on Kubernetes. Single PostgreSQL database. Built as Docker containers, scanned with Trivy, pushed to AWS ECR.
 
