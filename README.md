@@ -4,57 +4,31 @@
 
 ```mermaid
 graph TB
-    classDef client fill:#eceff1,stroke:#37474f,stroke-width:2px,color:#000;
-    classDef edge fill:#e1f5fe,stroke:#0288d1,stroke-width:2px,color:#01579b;
-    classDef ui fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#1b5e20;
-    classDef service fill:#fff3e0,stroke:#ef6c00,stroke-width:2px,color:#e65100;
-    classDef data fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px,color:#4a148c;
-    classDef ci fill:#ffebee,stroke:#c62828,stroke-width:2px,color:#b71c1c;
+    User[End User / Browser]
+    Ingress[NGINX Ingress Controller]
+    UI[store-ui-microservice]
+    Cart[cart-microservice]
+    Prod[products-microservice]
+    Users[users-microservice]
+    DB[(High Availability Database)]
+    Cache[(Redis Cache)]
+    JK[Jenkins Pipeline]
+    Registry[Container Registry]
 
-    User(["🌐 End User / Browser"]):::client
-
-    subgraph Edge_Layer ["🛡️ Security & Routing Boundary"]
-        Ingress["🚦 NGINX Ingress Controller<br>(SSL Termination & Auth)"]:::edge
-    end
-
-    subgraph Cluster ["☸️ Kubernetes Production Cluster"]
-        subgraph Frontend_Space ["🎨 User Interface"]
-            UI["💻 store-ui-microservice<br>(React / Next.js Static App)"]:::ui
-        end
-        subgraph Core_Services ["⚙️ Core Payment & Business Logic"]
-            Cart["🛒 cart-microservice<br>(State Manager)"]:::service
-            Prod["📦 products-microservice<br>(Catalog Engine)"]:::service
-            Users["🔑 users-microservice<br>(Identity & RBAC)"]:::service
-        end
-    end
-
-    subgraph Storage_Layer ["🔒 Isolated Data Tier (Private Subnet)"]
-        DB[(🛢️ High-Availability DB<br>User Data & Orders)]:::data
-        Cache[(⚡ Redis Cache<br>Session & Cart State)]:::data
-    end
-
-    subgraph Automation ["🚀 Automation & Delivery Engine"]
-        JK["🔴 Jenkins Pipeline<br>(Jenkinsfile)"]:::ci
-        Registry["📦 Container Registry<br>(Docker Hub / AWS ECR)"]:::ci
-    end
-
-    User -->|HTTPS :443| Ingress
-    Ingress -->|Route UI Traffic| UI
-    Ingress -->|API Requests| Users
-    Ingress -->|API Requests| Cart
-    Ingress -->|API Requests| Prod
-
-    Cart -->|Read / Write State| Cache
-    Prod -->|Fetch Catalog| DB
-    Users -->|Validate Auth / Store Profile| DB
-    Cart -.->|Verify Inventory| Prod
-
-    JK -->|1. Triggers Build & Test| Registry
-    Registry ==>|2. Continuous Deployment Pull| Cluster
-
-    style Cluster fill:#ffffff,stroke:#0078d4,stroke-width:3px,color:#0078d4;
-    style Storage_Layer fill:#fafafa,stroke:#7b1fa2,stroke-width:2px,stroke-dasharray: 5 5;
-
+    User-->Ingress
+    Ingress-->UI
+    Ingress-->Users
+    Ingress-->Cart
+    Ingress-->Prod
+    Cart-->Cache
+    Prod-->DB
+    Users-->DB
+    Cart-->Prod
+    JK-->Registry
+    Registry-->UI
+    Registry-->Users
+    Registry-->Cart
+    Registry-->Prod
 
 Production-grade microservices payment platform. Rebuilt from a fragile deployment into a fully automated, secure, and scalable system using Kubernetes, GitOps, and security-first CI/CD.
 
