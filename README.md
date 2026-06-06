@@ -1,48 +1,50 @@
 # StreamlinePay
 
 ```mermaid
-flowchart TB
+graph TB
 
-    User["Browser"]
+    classDef client fill:#eceff1,stroke:#37474f,stroke-width:2px,color:#000;
+    classDef edge fill:#e1f5fe,stroke:#0288d1,stroke-width:2px,color:#01579b;
+    classDef ui fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#1b5e20;
+    classDef service fill:#fff3e0,stroke:#ef6c00,stroke-width:2px,color:#e65100;
+    classDef data fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px,color:#4a148c;
+    classDef ci fill:#ffebee,stroke:#c62828,stroke-width:2px,color:#b71c1c;
 
-    ALB["AWS Load Balancer"]
+    User["🌐 End User / Browser"]:::client
 
-    Ingress["NGINX Ingress"]
+    Ingress1["🚦 NGINX Ingress Controller<br/>Web Routing"]:::edge
+    UI["💻 store-ui-microservice<br/>Frontend Application"]:::ui
 
-    subgraph EKS["Amazon EKS Cluster"]
+    Ingress2["🚦 NGINX Ingress Controller<br/>API Gateway Layer"]:::edge
 
-        UI["store-ui"]
+    Users["🔑 users-microservice"]:::service
+    Cart["🛒 cart-microservice"]:::service
+    Prod["📦 products-microservice"]:::service
 
-        Users["users-service"]
-        Cart["cart-service"]
-        Products["products-service"]
+    DB_Users["🛢️ PostgreSQL<br/>User Profiles"]:::data
+    Cache["⚡ Redis Cache<br/>Sessions"]:::data
+    DB_Prod["🛢️ PostgreSQL<br/>Product Catalog"]:::data
 
-        Redis["Redis"]
+    Jenkins["🔴 Jenkins CI/CD Pipeline"]:::ci
 
-        UserDB["PostgreSQL"]
-        ProductDB["PostgreSQL"]
-    end
+    User -->|1. Navigates to Website| Ingress1
+    Ingress1 -->|2. Serves Frontend| UI
+    UI -->|3. API Requests| Ingress2
 
-    Jenkins["Jenkins CI/CD"]
+    Ingress2 -->|/api/users| Users
+    Ingress2 -->|/api/cart| Cart
+    Ingress2 -->|/api/products| Prod
 
-    User --> ALB
-    ALB --> Ingress
+    Users -->|Store Profiles| DB_Users
+    Cart -->|Session Data| Cache
+    Prod -->|Catalog Data| DB_Prod
 
-    Ingress --> UI
+    Cart -->|Verify Stock & Pricing| Prod
 
-    Ingress --> Users
-    Ingress --> Cart
-    Ingress --> Products
-
-    Users --> UserDB
-    Cart --> Redis
-    Cart --> Products
-    Products --> ProductDB
-
-    Jenkins -.-> UI
-    Jenkins -.-> Users
-    Jenkins -.-> Cart
-    Jenkins -.-> Products
+    Jenkins -.->|Deploy Frontend| UI
+    Jenkins -.->|Deploy Service| Users
+    Jenkins -.->|Deploy Service| Cart
+    Jenkins -.->|Deploy Service| Prod
 ```
 
 Production-grade microservices payment platform. Rebuilt from a fragile deployment into a fully automated, secure, and scalable system using Kubernetes, GitOps, and security-first CI/CD.
