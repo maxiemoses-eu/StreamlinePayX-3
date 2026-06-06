@@ -3,46 +3,46 @@
 ```mermaid
 flowchart TB
 
-    User["End User / Browser"]
+    User["Browser"]
 
-    IngressWeb["NGINX Ingress Controller"]
+    ALB["AWS Load Balancer"]
 
-    UI["store-ui<br/>microservice"]
+    Ingress["NGINX Ingress"]
 
-    IngressAPI["NGINX Ingress Controller"]
+    subgraph EKS["Amazon EKS Cluster"]
 
-    Users["users<br/>microservice"]
-    Cart["cart<br/>microservice"]
-    Products["products<br/>microservice"]
+        UI["store-ui"]
 
-    UserDB["High-Availability<br/>Database"]
-    Redis["Redis Cache"]
-    ProductDB["High-Availability<br/>Database"]
+        Users["users-service"]
+        Cart["cart-service"]
+        Products["products-service"]
 
-    Jenkins["Jenkins Pipeline<br/>Jenkinsfile"]
+        Redis["Redis"]
 
-    User -->|"1. Navigates to website"| IngressWeb
+        UserDB["PostgreSQL"]
+        ProductDB["PostgreSQL"]
+    end
 
-    IngressWeb -->|"2. Routes & serves static web files"| UI
+    Jenkins["Jenkins CI/CD"]
 
-    UI -->|"3. Sends API requests"| IngressAPI
+    User --> ALB
+    ALB --> Ingress
 
-    IngressAPI -->|"/api/users"| Users
-    IngressAPI -->|"/api/cart"| Cart
-    IngressAPI -->|"/api/products"| Products
+    Ingress --> UI
 
-    Users -->|"Stores profiles"| UserDB
+    Ingress --> Users
+    Ingress --> Cart
+    Ingress --> Products
 
-    Cart -->|"Saves sessions"| Redis
+    Users --> UserDB
+    Cart --> Redis
+    Cart --> Products
+    Products --> ProductDB
 
-    Products -->|"Fetches catalog"| ProductDB
-
-    Cart -->|"4. Verifies stock & pricing"| Products
-
-    Jenkins -.->|"Builds Docker Images"| UI
-    Jenkins -.->|"Deploys"| Users
-    Jenkins -.->|"Deploys"| Cart
-    Jenkins -.->|"Deploys"| Products
+    Jenkins -.-> UI
+    Jenkins -.-> Users
+    Jenkins -.-> Cart
+    Jenkins -.-> Products
 ```
 
 Production-grade microservices payment platform. Rebuilt from a fragile deployment into a fully automated, secure, and scalable system using Kubernetes, GitOps, and security-first CI/CD.
