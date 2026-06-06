@@ -1,9 +1,8 @@
 # StreamlinePay
 
-## System Architecture & Deployment Topology (StreamlinePay)
-
 ```mermaid
 graph TB
+
     classDef client fill:#eceff1,stroke:#37474f,stroke-width:2px,color:#000;
     classDef edge fill:#e1f5fe,stroke:#0288d1,stroke-width:2px,color:#01579b;
     classDef ui fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#1b5e20;
@@ -11,36 +10,42 @@ graph TB
     classDef data fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px,color:#4a148c;
     classDef ci fill:#ffebee,stroke:#c62828,stroke-width:2px,color:#b71c1c;
 
-    User(["🌐 End User / Browser"]):::client
-    Ingress1["🚦 NGINX Ingress Controller<br>(Web Routing)"]:::edge
-    UI["💻 store-ui-microservice<br>(Frontend Application)"]:::ui
-    Ingress2["🚦 NGINX Ingress Controller<br>(API Gateway Layer)"]:::edge
-    
+    User["🌐 End User / Browser"]:::client
+
+    Ingress1["🚦 NGINX Ingress Controller<br/>Web Routing"]:::edge
+    UI["💻 store-ui-microservice<br/>Frontend Application"]:::ui
+
+    Ingress2["🚦 NGINX Ingress Controller<br/>API Gateway Layer"]:::edge
+
     Users["🔑 users-microservice"]:::service
     Cart["🛒 cart-microservice"]:::service
     Prod["📦 products-microservice"]:::service
 
-    DB_Users[(🛢️ High-Avail. Database<br>Profiles)]:::data
-    Cache[(⚡ Redis Cache<br>Sessions)]:::data
-    DB_Prod[(🛢️ High-Avail. Database<br>Catalog)]:::data
+    DB_Users["🛢️ PostgreSQL<br/>User Profiles"]:::data
+    Cache["⚡ Redis Cache<br/>Sessions"]:::data
+    DB_Prod["🛢️ PostgreSQL<br/>Product Catalog"]:::data
 
-    Jenkins["🔴 Jenkins Automation Engine<br>(Jenkinsfile)"]:::ci
+    Jenkins["🔴 Jenkins CI/CD Pipeline"]:::ci
 
-    User-->|1. Navigates to website|Ingress1
-    Ingress1-->|2. Serves static web files|UI
-    UI-->|3. Executes in browser & sends API requests|Ingress2
+    User -->|1. Navigates to Website| Ingress1
+    Ingress1 -->|2. Serves Frontend| UI
+    UI -->|3. API Requests| Ingress2
 
-    Ingress2-->|/api/users|Users
-    Ingress2-->|/api/cart|Cart
-    Ingress2-->|/api/products|Prod
+    Ingress2 -->|/api/users| Users
+    Ingress2 -->|/api/cart| Cart
+    Ingress2 -->|/api/products| Prod
 
-    Cart-->|4. Verifies stock & pricing|Prod
-    Users-->|Stores profiles|DB_Users
-    Cart-->|Saves sessions|Cache
-    Prod-->|Fetches catalog|DB_Prod
+    Users -->|Store Profiles| DB_Users
+    Cart -->|Session Data| Cache
+    Prod -->|Catalog Data| DB_Prod
 
-    Jenkins-.->|Builds & Deploys Code Changes|DB_Users
-    Jenkins-.->|Builds & Deploys Code Changes|DB_Prod
+    Cart -->|Verify Stock & Pricing| Prod
+
+    Jenkins -.->|Deploy Frontend| UI
+    Jenkins -.->|Deploy Service| Users
+    Jenkins -.->|Deploy Service| Cart
+    Jenkins -.->|Deploy Service| Prod
+```
 
 Production-grade microservices payment platform. Rebuilt from a fragile deployment into a fully automated, secure, and scalable system using Kubernetes, GitOps, and security-first CI/CD.
 
