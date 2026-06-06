@@ -4,7 +4,6 @@
 
 ```mermaid
 graph TB
-    %% Styling & Theme Configuration
     classDef client fill:#eceff1,stroke:#37474f,stroke-width:2px,color:#000;
     classDef edge fill:#e1f5fe,stroke:#0288d1,stroke-width:2px,color:#01579b;
     classDef ui fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#1b5e20;
@@ -12,23 +11,16 @@ graph TB
     classDef data fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px,color:#4a148c;
     classDef ci fill:#ffebee,stroke:#c62828,stroke-width:2px,color:#b71c1c;
 
-    %% Client Layer
     User(["🌐 End User / Browser"]):::client
 
-    %% Edge / Ingress Layer
     subgraph Edge_Layer ["🛡️ Security & Routing Boundary"]
         Ingress["🚦 NGINX Ingress Controller<br>(SSL Termination & Auth)"]:::edge
     end
 
-    %% Application Compute Layer (EKS/AKS Cluster)
     subgraph Cluster ["☸️ Kubernetes Production Cluster"]
-        
-        %% Frontend Component
         subgraph Frontend_Space ["🎨 User Interface"]
             UI["💻 store-ui-microservice<br>(React / Next.js Static App)"]:::ui
         end
-
-        %% Backend Microservices
         subgraph Core_Services ["⚙️ Core Payment & Business Logic"]
             Cart["🛒 cart-microservice<br>(State Manager)"]:::service
             Prod["📦 products-microservice<br>(Catalog Engine)"]:::service
@@ -36,38 +28,33 @@ graph TB
         end
     end
 
-    %% Database & State Layer
     subgraph Storage_Layer ["🔒 Isolated Data Tier (Private Subnet)"]
         DB[(🛢️ High-Availability DB<br>User Data & Orders)]:::data
         Cache[(⚡ Redis Cache<br>Session & Cart State)]:::data
     end
 
-    %% CI/CD & Automation Lifecycle
     subgraph Automation ["🚀 Automation & Delivery Engine"]
         JK["🔴 Jenkins Pipeline<br>(Jenkinsfile)"]:::ci
         Registry["📦 Container Registry<br>(Docker Hub / AWS ECR)"]:::ci
     end
 
-    %% Traffic Routing & Data Paths
     User -->|HTTPS :443| Ingress
     Ingress -->|Route UI Traffic| UI
     Ingress -->|API Requests| Users
     Ingress -->|API Requests| Cart
     Ingress -->|API Requests| Prod
 
-    %% Microservice Inter-communication & Storage links
     Cart -->|Read / Write State| Cache
     Prod -->|Fetch Catalog| DB
     Users -->|Validate Auth / Store Profile| DB
     Cart -.->|Verify Inventory| Prod
 
-    %% CI/CD Code Engine Links
     JK -->|1. Triggers Build & Test| Registry
     Registry ==>|2. Continuous Deployment Pull| Cluster
 
-    %% Layout Tuning
     style Cluster fill:#ffffff,stroke:#0078d4,stroke-width:3px,color:#0078d4;
     style Storage_Layer fill:#fafafa,stroke:#7b1fa2,stroke-width:2px,stroke-dasharray: 5 5;
+
 
 Production-grade microservices payment platform. Rebuilt from a fragile deployment into a fully automated, secure, and scalable system using Kubernetes, GitOps, and security-first CI/CD.
 
