@@ -2,19 +2,9 @@
 
 ### Kubernetes · AWS EKS · Terraform · Jenkins · ArgoCD · Helm · Docker · Trivy
 
-**StreamlinePay is a containerized microservices platform running on Amazon EKS, with AWS infrastructure managed through Terraform and application delivery implemented through Jenkins CI and GitOps with ArgoCD.**
+**StreamlinePay is a containerized microservices platform running on Amazon EKS, with infrastructure managed through Terraform and application delivery through Jenkins CI and GitOps with ArgoCD.**
 
-The platform separates three concerns:
-
-```text
-APPLICATION          INFRASTRUCTURE          DEPLOYMENT
-     │                      │                     │
-     ▼                      ▼                     ▼
-StreamlinePayX-3      stream-infra-clean     agrocd-yaml
-     │                      │                     │
-     ▼                      ▼                     ▼
-Services + CI          Terraform + AWS       Helm + ArgoCD
-```
+The project is intentionally split into **three repositories**, each with a distinct responsibility.
 
 ---
 
@@ -23,472 +13,289 @@ Services + CI          Terraform + AWS       Helm + ArgoCD
 ```mermaid
 flowchart LR
 
-    %% =========================
-    %% SOURCE
-    %% =========================
+    DEV["Developer"]
 
-    Dev["👨‍💻 Developer"]
+    APP["StreamlinePayX-3<br/><br/>Application Source<br/>Dockerfiles<br/>Jenkins CI"]
 
-    GitHub["GitHub<br/>StreamlinePayX-3"]
+    INFRA["stream-infra-clean<br/><br/>Terraform<br/>AWS Infrastructure"]
 
-    Dev -->|"git push"| GitHub
+    GITOPS["agrocd-yaml<br/><br/>Helm<br/>Kubernetes Manifests<br/>GitOps State"]
 
-    %% =========================
-    %% CI
-    %% =========================
+    JENKINS["Jenkins"]
 
-    subgraph CI["CONTINUOUS INTEGRATION"]
+    ECR["Amazon ECR"]
 
-        Jenkins["🔴 Jenkins"]
+    ARGO["ArgoCD"]
 
-        Build["Docker Build<br/>4 Images"]
+    EKS["Amazon EKS"]
 
-        Scan["🛡️ Trivy<br/>Vulnerability Scan"]
+    DEV -->|"git push"| APP
 
-        Registry["📦 Amazon ECR"]
+    APP -->|"Webhook"| JENKINS
 
-        Jenkins --> Build
-        Build --> Scan
-        Scan -->|"Pass"| Registry
+    JENKINS -->|"Build + Scan + Push"| ECR
 
-    end
+    JENKINS -->|"Update image reference"| GITOPS
 
-    GitHub -->|"Webhook"| Jenkins
+    GITOPS -->|"Desired state"| ARGO
 
-    %% =========================
-    %% GITOPS
-    %% =========================
+    ARGO -->|"Reconcile"| EKS
 
-    subgraph GitOps["GITOPS DELIVERY"]
+    ECR -->|"Pull images"| EKS
 
-        Repo["📁 agrocd-yaml<br/>Helm + Kubernetes"]
-
-        Argo["🔄 ArgoCD"]
-
-        Jenkins -->|"Update image tag"| Repo
-        Repo -->|"Desired state"| Argo
-
-    end
-
-    %% =========================
-    %% AWS
-    %% =========================
-
-    subgraph AWS["AWS"]
-
-        subgraph EKS["☸ Amazon EKS"]
-
-            Ingress["NGINX<br/>Ingress"]
-
-            UI["🖥️ Store UI<br/>React / Nginx"]
-
-            API["API Routing"]
-
-            Users["👤 Users<br/>Python / FastAPI"]
-
-            Cart["🛒 Cart<br/>Java / Spring Boot"]
-
-            Products["📦 Products<br/>Node.js / Express"]
-
-            DB["🗄️ PostgreSQL"]
-
-            Cache["⚡ Redis"]
-
-            Ingress --> UI
-            UI --> API
-
-            API --> Users
-            API --> Cart
-            API --> Products
-
-            Users --> DB
-            Products --> DB
-            Cart --> Cache
-            Cart -->|"Stock / pricing"| Products
-
-        end
-
-    end
-
-    Argo -->|"Reconcile"| EKS
-    Registry -->|"Pull images"| EKS
-
-    %% =========================
-    %% INFRASTRUCTURE
-    %% =========================
-
-    Terraform["Terraform<br/>stream-infra-clean"]
-
-    Terraform -->|"Provision / manage"| AWS
-
-    %% =========================
-    %% USER TRAFFIC
-    %% =========================
-
-    Browser["🌐 End User"]
-
-    Browser -->|"HTTPS"| Ingress
+    INFRA -->|"Terraform provisions"| EKS
 ```
 
-### The delivery path
+### How the repositories connect
 
 ```text
-CODE
-  │
-  ▼
-GitHub
-  │
-  ▼
-Jenkins
-  │
-  ├── Build
-  ├── Scan
-  └── Publish
-          │
-          ▼
-       Amazon ECR
-          
-Jenkins ───────► GitOps Repository
-                       │
-                       ▼
-                    ArgoCD
-                       │
-                       ▼
-                    EKS
+                         STREAMLINEPAY
+                              │
+          ┌───────────────────┼───────────────────┐
+          │                   │                   │
+          ▼                   ▼                   ▼
+ ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐
+ │ StreamlinePayX-3│  │ stream-infra-   │  │ agrocd-yaml     │
+ │                 │  │ clean           │  │                 │
+ │ Application     │  │                 │  │ Helm            │
+ │ Dockerfiles     │  │ Terraform       │  │ Kubernetes      │
+ │ Jenkinsfile     │  │ AWS             │  │ ArgoCD          │
+ └────────┬────────┘  └────────┬────────┘  └────────┬────────┘
+          │                    │                     │
+          ▼                    ▼                     ▼
+       Jenkins              AWS / EKS             ArgoCD
+          │                                          │
+          ▼                                          │
+      Amazon ECR ────────────────────────────────────┘
+                         container images
 ```
 
-**Jenkins builds and publishes artifacts.
-Git stores the desired deployment state.
-ArgoCD reconciles that state into Kubernetes.**
+The three repositories have separate lifecycles:
 
-Terraform operates on a separate lifecycle and manages the AWS infrastructure underneath the platform.
+| Repository           | Responsibility                       | Connects to            |
+| -------------------- | ------------------------------------ | ---------------------- |
+| `StreamlinePayX-3`   | Application source and Jenkins CI    | Jenkins → ECR → GitOps |
+| `stream-infra-clean` | AWS infrastructure through Terraform | AWS / EKS              |
+| `agrocd-yaml`        | Helm and Kubernetes desired state    | ArgoCD → EKS           |
 
 ---
 
-# Platform Overview
+## The Delivery Flow
 
-StreamlinePay consists of:
-
-* **3 backend services**
-* **1 frontend application**
-* **PostgreSQL**
-* **Redis**
-* **NGINX Ingress**
-* **AWS EKS**
-* **Jenkins CI**
-* **ArgoCD GitOps delivery**
-* **Terraform-managed AWS infrastructure**
-
-### Application services
-
-| Service                 | Stack              | Responsibility    |
-| ----------------------- | ------------------ | ----------------- |
-| `products-microservice` | Node.js / Express  | Product catalogue |
-| `users-microservice`    | Python / FastAPI   | User management   |
-| `cart-microservice`     | Java / Spring Boot | Shopping cart     |
-| `store-ui-microservice` | React / Nginx      | Web frontend      |
-
-Each application component has its own Docker build context and is handled independently by the CI pipeline.
-
----
-
-# Delivery Architecture
-
-The CI/CD workflow is intentionally divided into **build** and **deployment** responsibilities.
-
-### Continuous Integration
+The application repository is the starting point for a deployment.
 
 ```text
-GitHub
-   │
-   ▼
+Developer
+    │
+    │ git push
+    ▼
+StreamlinePayX-3
+    │
+    │ webhook
+    ▼
 Jenkins
-   │
-   ├── Checkout
-   │
-   ├── Build containers
-   │
-   ├── Trivy scan
-   │
-   └── Push to ECR
-```
-
-Images are tagged with the source revision so an artifact can be traced back to the code that produced it.
-
-### GitOps Delivery
-
-```text
-Jenkins
-   │
-   │ image reference
-   ▼
+    │
+    ├── Build Docker images
+    │
+    ├── Run Trivy scans
+    │
+    └── Push images
+            │
+            ▼
+        Amazon ECR
+            │
+            │
+Jenkins ─────┘
+    │
+    │ update image reference
+    ▼
 agrocd-yaml
-   │
-   │ desired state
-   ▼
+    │
+    │ desired state
+    ▼
 ArgoCD
-   │
-   │ reconciliation
-   ▼
+    │
+    │ reconcile
+    ▼
 Amazon EKS
-```
-
-Jenkins does **not** directly apply Kubernetes workloads.
-
-Instead, it updates the deployment configuration in Git.
-
-ArgoCD then reconciles the cluster against that desired state.
-
-This keeps deployment configuration version-controlled and provides a clear audit trail for application changes.
-
----
-
-# Infrastructure
-
-AWS infrastructure is managed separately through:
-
-**`stream-infra-clean`**
-
-Terraform is responsible for the infrastructure layer while the application and deployment repositories remain independent.
-
-```text
-Terraform
     │
-    ▼
-AWS Infrastructure
-    │
-    ├── VPC
-    ├── EKS
-    ├── IAM
-    └── Supporting resources
-```
-
-The separation allows infrastructure changes and application changes to follow independent lifecycles.
-
----
-
-# Security
-
-Security controls are integrated into the delivery workflow.
-
-### Container scanning
-
-Trivy scans container images before they are published to ECR.
-
-The pipeline is configured to stop when images exceed the configured vulnerability threshold.
-
-### Image traceability
-
-Images use source/build identifiers rather than relying exclusively on mutable tags such as `latest`.
-
-```text
-Git commit
-    │
-    ▼
-Jenkins build
-    │
-    ▼
-Container image
-    │
+    │ pull image
     ▼
 Amazon ECR
-    │
-    ▼
-GitOps deployment
 ```
 
-### AWS access
-
-The CI workflow uses scoped AWS permissions for the resources required by the pipeline rather than relying on broad administrative access.
-
-### Git as deployment history
-
-Deployment changes are represented in Git.
-
-That provides:
-
-* Change history
-* Reviewable configuration
-* Traceable image promotions
-* Git-based rollback
+**Jenkins handles CI and updates the deployment reference.
+ArgoCD handles GitOps reconciliation.
+Terraform manages the underlying AWS infrastructure.**
 
 ---
 
-# Repository Architecture
+## Repository 1: Application + CI
 
-The project is split into three repositories.
-
-### Application + CI
-
-**`StreamlinePayX-3`**
+### `StreamlinePayX-3`
 
 ```text
 StreamlinePayX-3/
+│
 ├── cart-microservice/
 ├── products-microservice/
 ├── store-ui-microservice/
 ├── users-microservice/
+│
 ├── Jenkinsfile
 ├── README.md
 └── .gitignore
 ```
 
-Contains application source, Dockerfiles and the Jenkins pipeline.
+This repository contains the application source code and the Jenkins pipeline.
 
-### Infrastructure
-
-**`stream-infra-clean`**
-
-Contains Terraform configuration for the AWS infrastructure.
-
-### GitOps
-
-**`agrocd-yaml`**
-
-Contains Helm and Kubernetes deployment configuration consumed by ArgoCD.
+Jenkins uses this repository to:
 
 ```text
-                    ┌─────────────────────┐
-                    │   Application Repo  │
-                    │   Source + Jenkins  │
-                    └──────────┬──────────┘
-                               │
-                               ▼
-                           Jenkins
-                               │
-                     ┌─────────┴─────────┐
-                     ▼                   ▼
-                  ECR               GitOps Repo
-                     │                   │
-                     │                   ▼
-                     │                ArgoCD
-                     │                   │
-                     └─────────┬─────────┘
-                               ▼
-                            AWS EKS
-
-                 Terraform
-                     │
-                     ▼
-              AWS Infrastructure
+Source Code
+     │
+     ▼
+Docker Build
+     │
+     ▼
+Trivy Scan
+     │
+     ▼
+Amazon ECR
 ```
 
 ---
 
-# Engineering Decisions
+## Repository 2: Infrastructure
 
-### Why separate infrastructure from application code?
-
-Infrastructure has a different lifecycle from application source. Keeping Terraform separate prevents application changes from becoming coupled to infrastructure configuration.
-
-### Why GitOps?
-
-The desired Kubernetes state remains in Git rather than being hidden inside a CI server.
-
-### Why ArgoCD?
-
-ArgoCD provides continuous reconciliation between the declared state in Git and the state running in Kubernetes.
-
-### Why versioned images?
-
-A deployment should be traceable to a specific source revision rather than depending on a mutable `latest` image.
-
-### Why scan before pushing?
-
-Container security checks are performed before the image enters the deployment path.
-
----
-
-# Operational Workflow
-
-The repository also includes the basic operational workflow used to investigate Kubernetes issues.
-
-### Workloads
-
-```bash
-kubectl get pods -n streamlinepay
-```
-
-### Pod diagnostics
-
-```bash
-kubectl describe pod <pod-name> -n streamlinepay
-```
-
-### Application logs
-
-```bash
-kubectl logs -f <pod-name> -n streamlinepay
-```
-
-### ArgoCD
-
-```bash
-argocd app get <application-name>
-```
-
-Manual synchronization when required:
-
-```bash
-argocd app sync <application-name>
-```
-
-The troubleshooting approach is to isolate the failing layer:
+### `stream-infra-clean`
 
 ```text
-Ingress
-   ↓
-Service
-   ↓
-Pod
-   ↓
-Container
-   ↓
-Application
+stream-infra-clean/
+│
+├── Terraform configuration
+├── AWS resources
+├── EKS infrastructure
+├── IAM configuration
+└── supporting infrastructure
 ```
+
+This repository is responsible for the AWS infrastructure layer.
+
+```text
+Terraform
+    │
+    ▼
+AWS
+    │
+    ├── Networking
+    ├── IAM
+    ├── EKS
+    └── Supporting resources
+```
+
+Infrastructure changes are therefore separated from application delivery.
 
 ---
 
-# Quick Start
+## Repository 3: GitOps
 
-Clone the application repository:
+### `agrocd-yaml`
 
-```bash
-git clone https://github.com/maxiemoses-eu/StreamlinePayX-3.git
-
-cd StreamlinePayX-3
+```text
+agrocd-yaml/
+│
+├── Helm configuration
+├── Kubernetes manifests
+├── Application definitions
+└── deployment configuration
 ```
 
-Generate the current commit identifier:
+This repository represents the **desired state** of the application running in Kubernetes.
 
-```bash
-COMMIT=$(git rev-parse --short HEAD)
+```text
+agrocd-yaml
+     │
+     ▼
+  ArgoCD
+     │
+     ▼
+  Amazon EKS
 ```
 
-Build the application images:
-
-```bash
-docker build -t products-microservice:$COMMIT ./products-microservice
-
-docker build -t users-microservice:$COMMIT ./users-microservice
-
-docker build -t cart-microservice:$COMMIT ./cart-microservice
-
-docker build -t store-ui-microservice:$COMMIT ./store-ui-microservice
-```
-
-The Jenkins pipeline automates the subsequent build, scan, ECR publication and GitOps update workflow.
+ArgoCD continuously compares the desired state in Git with the state running in the cluster and reconciles differences.
 
 ---
 
-# Current State
+# Complete Relationship
+
+```mermaid
+flowchart TB
+
+    subgraph REPOS["THREE GIT REPOSITORIES"]
+
+        APP["StreamlinePayX-3<br/><br/>Application<br/>Dockerfiles<br/>Jenkinsfile"]
+
+        INFRA["stream-infra-clean<br/><br/>Terraform<br/>AWS Infrastructure"]
+
+        GITOPS["agrocd-yaml<br/><br/>Helm<br/>Kubernetes<br/>GitOps"]
+
+    end
+
+    subgraph DELIVERY["DELIVERY"]
+
+        JENKINS["Jenkins"]
+
+        ECR["Amazon ECR"]
+
+        ARGO["ArgoCD"]
+
+    end
+
+    subgraph RUNTIME["RUNTIME"]
+
+        EKS["Amazon EKS"]
+
+    end
+
+    APP --> JENKINS
+    JENKINS --> ECR
+    JENKINS --> GITOPS
+    GITOPS --> ARGO
+    ARGO --> EKS
+    ECR --> EKS
+
+    INFRA -->|"Terraform"| EKS
+```
+
+### In one sentence
+
+> **StreamlinePayX-3 builds the application, `stream-infra-clean` builds the AWS foundation, and `agrocd-yaml` defines what should run on Kubernetes. Jenkins connects application changes to the GitOps repository, while ArgoCD connects that desired state to EKS.**
+
+---
+
+## Platform Components
+
+| Component  | Role                                 |
+| ---------- | ------------------------------------ |
+| AWS EKS    | Kubernetes runtime                   |
+| Terraform  | Infrastructure as Code               |
+| Jenkins    | Continuous Integration               |
+| Docker     | Containerization                     |
+| Amazon ECR | Container registry                   |
+| Trivy      | Container vulnerability scanning     |
+| Helm       | Kubernetes packaging                 |
+| ArgoCD     | GitOps deployment and reconciliation |
+
+---
+
+## Current State
 
 | Capability                         | Status      |
 | ---------------------------------- | ----------- |
 | Microservice application           | Implemented |
 | Docker containerization            | Implemented |
 | Jenkins CI                         | Implemented |
-| Parallel image builds              | Implemented |
 | Trivy scanning                     | Implemented |
 | Amazon ECR                         | Implemented |
 | Helm deployment configuration      | Implemented |
@@ -499,56 +306,65 @@ The Jenkins pipeline automates the subsequent build, scan, ECR publication and G
 | Prometheus / Grafana               | Planned     |
 | Centralized logging                | Planned     |
 
-Some application health checks still require refinement around service ports and/or Kubernetes probe configuration.
+---
 
-Observability is the next major area of iteration.
+## Engineering Model
+
+The project follows a simple separation of concerns:
+
+```text
+APPLICATION
+     │
+     ▼
+StreamlinePayX-3
+     │
+     ▼
+   Jenkins
+     │
+     ├──────────────► Amazon ECR
+     │
+     ▼
+GITOPS
+     │
+     ▼
+agrocd-yaml
+     │
+     ▼
+   ArgoCD
+     │
+     ▼
+RUNTIME
+     │
+     ▼
+Amazon EKS
+
+
+INFRASTRUCTURE
+     │
+     ▼
+stream-infra-clean
+     │
+     ▼
+  Terraform
+     │
+     ▼
+AWS / EKS
+```
+
+This separation keeps **application code, infrastructure code and deployment state independently version-controlled** while allowing them to work together as one delivery system.
 
 ---
 
-# What Comes Next
+## Related Repositories
 
-The next iterations focus on:
-
-* Prometheus metrics
-* Grafana dashboards
-* Centralized logging
-* Kubernetes health-check refinement
-* Container hardening
-* Deployment observability
-* Failure and recovery testing
+* `StreamlinePayX-3` → Application + Jenkins CI
+* `stream-infra-clean` → AWS + Terraform
+* `agrocd-yaml` → Helm + ArgoCD GitOps
 
 ---
 
-# Related Repositories
-
-| Repository           | Role                     |
-| -------------------- | ------------------------ |
-| `StreamlinePayX-3`   | Application + Jenkins CI |
-| `stream-infra-clean` | AWS + Terraform          |
-| `agrocd-yaml`        | Helm + ArgoCD GitOps     |
-
----
-
-# Case Study
-
-**How I Rebuilt StreamlinePay — A Complete AWS DevOps and GitOps Case Study**
-
-The accompanying case study documents the architectural decisions, infrastructure design, CI/CD workflow and lessons from rebuilding the platform.
-
----
-
-# Author
-
-**Maxie Moses**
-
-DevOps / Cloud Infrastructure
-
-[GitHub](https://github.com/maxiemoses-eu) · [LinkedIn](https://www.linkedin.com/in/maxie-moses-a-26a2788b/) · [Medium](https://medium.com/@MaxieMoses)
-
----
-
-### Status
+## Status
 
 **Active portfolio project**
 
-Continuously evolving across Kubernetes operations, observability, security and deployment automation.
+The platform continues to evolve around Kubernetes operations, deployment automation, observability and security.
